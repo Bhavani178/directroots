@@ -1,0 +1,1 @@
+DELETE FROM "OrderItem" WHERE "orderId" IS NULL;

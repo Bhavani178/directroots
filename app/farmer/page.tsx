@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import {
-  Package, DollarSign, TrendingUp,
+  Package, IndianRupee, TrendingUp,
   ShoppingBag, Plus, Edit, Trash2, Map,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -47,12 +47,12 @@ export default function FarmerDashboardPage() {
     return new Date(o.createdAt) > weekAgo
   }).length
 
-  const stats = [
-    { title: "Total Revenue", value: `₹${totalRevenue.toFixed(0)}`, icon: DollarSign },
-    { title: "Products Listed", value: String(products.length), icon: Package },
-    { title: "Orders This Week", value: String(ordersThisWeek), icon: ShoppingBag },
-    { title: "Total Orders", value: String(orders.length), icon: TrendingUp },
-  ]
+ const stats = [
+  { title: "Total Revenue", value: `₹${totalRevenue.toFixed(0)}`, icon: IndianRupee },
+  { title: "Products Listed", value: String(products.length), icon: Package },
+  { title: "Orders This Week", value: String(ordersThisWeek), icon: ShoppingBag },
+  { title: "Total Orders", value: String(orders.length), icon: TrendingUp },
+]
 
   const statusOptions = ["PENDING", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED"]
   const statusColors: Record<string, string> = {

@@ -18,9 +18,16 @@ export default function DeliveryMap({ routeData }: { routeData: any }) {
   const mapRef = useRef<L.Map | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
+
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return
-    if (!routeData?.farmerLocation) return
+  if (!containerRef.current) return
+  if (mapRef.current) {
+    mapRef.current.remove()
+    mapRef.current = null
+  }
+  if (!routeData?.farmerLocation) return
+
+  // ... rest of map code stays same
 
     const { lat, lng } = routeData.farmerLocation
 
