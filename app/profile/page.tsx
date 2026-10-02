@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { MapPin, Navigation, ImagePlus, Loader2, Save, User } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -87,12 +88,13 @@ export default function ProfilePage() {
       if (res.ok) {
         const { url } = await res.json()
         setFormData((prev) => ({ ...prev, profileImage: url }))
+        toast.success("Image uploaded successfully!")
       } else {
         const data = await res.json()
-        window.alert(data.error || "Upload failed")
+        toast.error(data.error || "Upload failed")
       }
     } catch (err: any) {
-      window.alert(err.message || "An unexpected error occurred during upload.")
+      toast.error(err.message || "An unexpected error occurred during upload.")
     } finally {
       setIsUploading(false)
     }
@@ -105,7 +107,7 @@ export default function ProfilePage() {
       lng: confirmedLng,
       address: addressText || prev.address,
     }))
-    window.alert(`Location pin set to: ${confirmedLat.toFixed(5)}, ${confirmedLng.toFixed(5)}`)
+    toast.success(`Location pin set to: ${confirmedLat.toFixed(5)}, ${confirmedLng.toFixed(5)}`)
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -139,14 +141,19 @@ export default function ProfilePage() {
           lat: data.lat ?? prev.lat,
           lng: data.lng ?? prev.lng,
         }))
-        window.alert("Profile saved successfully!")
+        toast.success("Profile saved successfully!")
+        if (session?.user?.role === "FARMER") {
+          router.push("/farmer")
+        } else {
+          router.push("/marketplace")
+        }
       } else {
         const err = await res.json()
-        window.alert(err.error || "Failed to save profile.")
+        toast.error(err.error || "Failed to save profile.")
       }
     } catch (err) {
       console.error(err)
-      window.alert("An error occurred while saving.")
+      toast.error("An error occurred while saving.")
     } finally {
       setIsSaving(false)
     }
@@ -183,7 +190,7 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-[#6B8E23] bg-muted/30 p-8 transition-colors hover:border-primary/50 relative">
-                <div className="mb-4 rounded-full bg-primary/10 p-4 overflow-hidden h-24 w-24 flex items-center justify-center">
+                <div className={`mb-4 rounded-full bg-primary/10 overflow-hidden h-24 w-24 flex items-center justify-center ${formData.profileImage ? "" : "p-4"}`}>
                   {formData.profileImage ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img src={formData.profileImage} alt="Profile" className="h-full w-full object-cover" />
