@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react"
 import { useSession } from "next-auth/react"
+import { toast } from "sonner"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -126,11 +127,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId: parsedId, quantity: 1 }),
       })
-      if (!res.ok) throw new Error("Cart API failed")
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to add item to cart")
+      }
       // Re-hydrate to get real cartItemId from DB
       await hydrateCart()
-    } catch (err) {
+      toast.success(`${product.name} added to cart`)
+    } catch (err: any) {
       console.error("[addToCart]", err)
+      toast.error(err.message)
       // Revert optimistic update on failure
       await hydrateCart()
     }
@@ -165,7 +171,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ id: cartItemId, quantity }),
       })
       if (!res.ok) {
-        console.error("[updateQuantity] API error:", await res.text())
+        const errorData = await res.json().catch(() => ({}))
+        toast.error(errorData.error || "Failed to update quantity")
         return
       }
       const data = await res.json()
