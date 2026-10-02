@@ -7,19 +7,59 @@ import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useCart } from "@/lib/cart-context"
+import { useLanguage } from "@/lib/LanguageContext"
+
+import { useState } from "react"
+import dynamic from "next/dynamic"
+
+const LocationPicker = dynamic(() => import("@/components/location-picker"), {
+  ssr: false,
+  loading: () => <div className="h-[250px] w-full rounded-lg bg-muted flex items-center justify-center text-sm text-muted-foreground">Loading delivery map...</div>,
+})
 
 export default function CartPage() {
   const { items, updateQuantity, removeFromCart, total, clearCart } = useCart()
+  const { t } = useLanguage()
   const router = useRouter()
-  const handleCheckout = async () => {
-  const res = await fetch("/api/orders", { method: "POST" })
-  if (res.ok) {
-    clearCart()
-    router.push("/orders")
-  } else {
-    alert("Checkout failed, please try again")
+  const [showLocationPicker, setShowLocationPicker] = useState(false)
+  const [confirmedPin, setConfirmedPin] = useState<{ lat: number; lng: number; address?: string } | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleConfirmCheckoutLocation = async (lat: number, lng: number, addressText?: string) => {
+    setConfirmedPin({ lat, lng, address: addressText })
+    setCheckoutError(null)
+    setIsSubmitting(true)
+
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deliveryLat: lat,
+          deliveryLng: lng,
+          deliveryAddress: addressText || null,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        clearCart()
+        router.push("/orders")
+      } else {
+        setCheckoutError(data.error || "Checkout failed. Please check your delivery location and try again.")
+      }
+    } catch (err: any) {
+      setCheckoutError(err.message || "An unexpected error occurred during checkout.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
-}
+
+  const handleCheckoutClick = () => {
+    setShowLocationPicker(true)
+  }
   
 
   if (items.length === 0) {
@@ -28,13 +68,13 @@ export default function CartPage() {
         <div className="mb-6 rounded-full bg-muted p-6">
           <ShoppingBag className="h-12 w-12 text-muted-foreground" />
         </div>
-        <h1 className="text-2xl font-bold">Your cart is empty</h1>
+        <h1 className="text-2xl font-bold">{t("Your cart is empty")}</h1>
         <p className="mt-2 text-center text-muted-foreground">
-          Looks like you haven&apos;t added any products yet.
+          {t("Looks like you haven't added any products yet.")}
         </p>
         <Link href="/marketplace" className="mt-6">
           <Button className="gap-2">
-            Browse Products
+            {t("Browse Products")}
             <ArrowRight className="h-4 w-4" />
           </Button>
         </Link>
@@ -44,11 +84,11 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="border-b border-border bg-secondary/30 py-8">
+      <div className="border-b border-[#6B8E23] bg-secondary/30 py-8">
         <div className="mx-auto max-w-7xl px-4 lg:px-8">
-          <h1 className="text-3xl font-bold tracking-tight">Shopping Cart</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("Shopping Cart")}</h1>
           <p className="mt-2 text-muted-foreground">
-            {items.length} {items.length === 1 ? "item" : "items"} in your cart
+            {items.length} {items.length === 1 ? t("item") : t("items")} {t("in your cart")}
           </p>
         </div>
       </div>
@@ -64,9 +104,10 @@ export default function CartPage() {
                     <div className="flex gap-4">
                       <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg">
                         <Image
-                          src={item.image}
+                          src={item.imageUrl || "/placeholder.svg"}
                           alt={item.name}
                           fill
+                          sizes="96px"
                           className="object-cover"
                         />
                       </div>
@@ -76,14 +117,16 @@ export default function CartPage() {
                             <div>
                               <h3 className="font-semibold">{item.name}</h3>
                               <p className="text-sm text-muted-foreground">
-                                {item.farmer}
+                                {typeof item.farmer === "string"
+                                  ? item.farmer
+                                  : (item.farmer?.farmName ?? item.farmer?.name ?? item.farmer_name ?? "")}
                               </p>
                             </div>
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                              onClick={() => removeFromCart(item.id)}
+                              onClick={() => removeFromCart(item.cartItemId)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -96,7 +139,7 @@ export default function CartPage() {
                               size="icon"
                               className="h-8 w-8"
                               onClick={() =>
-                                updateQuantity(item.id, item.quantity - 1)
+                                updateQuantity(item.cartItemId, item.quantity - 1)
                               }
                             >
                               <Minus className="h-4 w-4" />
@@ -109,7 +152,7 @@ export default function CartPage() {
                               size="icon"
                               className="h-8 w-8"
                               onClick={() =>
-                                updateQuantity(item.id, item.quantity + 1)
+                                updateQuantity(item.cartItemId, item.quantity + 1)
                               }
                             >
                               <Plus className="h-4 w-4" />
@@ -131,45 +174,70 @@ export default function CartPage() {
           <div>
             <Card className="sticky top-24">
               <CardContent className="p-6">
-                <h2 className="mb-4 text-lg font-semibold">Order Summary</h2>
+                <h2 className="mb-4 text-lg font-semibold">{t("Order Summary")}</h2>
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-muted-foreground">{t("Subtotal")}</span>
                     <span>₹{total}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Delivery</span>
+                    <span className="text-muted-foreground">{t("Delivery")}</span>
                     <span className={total >= 35 ? "text-primary" : ""}>
-                      {total >= 500 ? "Free" : "₹40"}
+                      {total >= 500 ? t("Free") : "₹40"}
                     </span>
                   </div>
                   {total < 500 && (
                     <p className="text-xs text-muted-foreground">
-                      Add ₹{500 - total} more for free delivery
+                      {t("Add ₹")}{500 - total}{t("more for free delivery")}
                     </p>
                   )}
-                  <div className="border-t border-border pt-3">
+                  <div className="border-t border-[#6B8E23] pt-3">
                     <div className="flex justify-between font-semibold">
-                      <span>Total</span>
+                      <span>{t("Total")}</span>
                       <span className="text-primary">
                         ₹{total + (total >= 500 ? 0 : 40)}
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="mt-4 rounded-lg bg-green-100 p-4 text-sm text-green-800">
-                  🚚 Eco Delivery Available
+                <div className="mt-4 rounded-lg bg-[#6B8E23]/20 p-4 text-sm text-[#6B8E23]">
+                  {t("🚚 Eco Delivery Available")}
 
-                  Your order qualifies for grouped local delivery,
-                  reducing fuel consumption and pollution.
+                  {t("Your order qualifies for grouped local delivery, reducing fuel consumption and pollution.")}
                 </div>
-                <Button className="mt-6 w-full gap-2" onClick={handleCheckout}>
-                  Proceed to Checkout
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
+                {!showLocationPicker ? (
+                  <>
+                    {checkoutError && (
+                      <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                        {checkoutError}
+                      </div>
+                    )}
+                    <Button className="mt-6 w-full gap-2" onClick={handleCheckoutClick}>
+                      {t("Proceed to Checkout")}
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <div className="mt-6 space-y-3 border-t border-[#6B8E23] pt-4">
+                    <h3 className="text-sm font-semibold text-foreground">{t("Confirm Delivery Location Pin")}</h3>
+                    {checkoutError && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                        {checkoutError}
+                      </div>
+                    )}
+                    <LocationPicker
+                      onConfirmLocation={handleConfirmCheckoutLocation}
+                      confirmButtonText={isSubmitting ? t("Placing Order...") : t("Confirm Pin & Place Order")}
+                    />
+                    <Button variant="ghost" className="w-full text-xs" onClick={() => setShowLocationPicker(false)}>
+                      {t("Cancel Checkout")}
+                    </Button>
+                  </div>
+                )}
+
                 <Link href="/marketplace">
                   <Button variant="ghost" className="mt-2 w-full">
-                    Continue Shopping
+                    {t("Continue Shopping")}
                   </Button>
                 </Link>
               </CardContent>

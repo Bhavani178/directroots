@@ -5,6 +5,7 @@ import './globals.css'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
 import { Providers } from './providers'      // ← import this
+import { FarmerVoiceNav } from '@/components/farmer-voice-nav'
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
@@ -36,6 +37,7 @@ export default function RootLayout({
             <Header />
             <main className="flex-1">{children}</main>
             <Footer />
+            <FarmerVoiceNav />
           </div>
         </Providers>
         {process.env.NODE_ENV === 'production' && <Analytics />}

@@ -3,13 +3,18 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────────────────────────
+//  Enums
+// ─────────────────────────────────────────────
+
 enum Role {
-  FARMER
   CUSTOMER
+  FARMER
+  ARTISAN
 }
 
 enum OrderStatus {
@@ -19,60 +24,156 @@ enum OrderStatus {
   DELIVERED
 }
 
+// ─────────────────────────────────────────────
+//  User
+//  One table covers all three roles.
+//  Profile fields (bio, farmName, etc.) are
+//  nullable and only relevant for FARMER/ARTISAN.
+// ─────────────────────────────────────────────
+
 model User {
-  id        Int        @id @default(autoincrement())
-  name      String
-  email     String     @unique
-  password  String
-  role      Role       @default(CUSTOMER)
-  address   String?
-  lat       Float?
-  lng       Float?
-  createdAt DateTime   @default(now())
-  orders    Order[]
-  cartItems CartItem[]
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  password     String
+  role         Role     @default(CUSTOMER)
+
+  // Public producer profile (FARMER / ARTISAN)
+  bio          String?
+  farmName     String?   // Farm name OR artisan workshop name
+  profileImage String?
+
+  // Location (geocoded from address on registration or profile update)
+  address      String?
+  lat          Float?
+  lng          Float?
+
+  emailVerified DateTime?
+
+  createdAt    DateTime @default(now())
+
+  // Relations
+  products     Product[]   // Products listed by this producer
+  orders       Order[]     // Orders placed by this customer
+  cartItems    CartItem[]
 }
 
+// ─────────────────────────────────────────────
+//  Product
+//  Linked to its producer via farmerId FK.
+//  Covers both farm products and handmade crafts.
+// ─────────────────────────────────────────────
+
 model Product {
-  id          Int         @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
+
+  // Producer relationship (replaces the old bare farmerName string)
+  farmerId    Int
+  farmer      User     @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+
+  // Core listing fields
   name        String
   description String?
   price       Float
-  stock       Int         @default(0)
+  stock       Int      @default(0)
   imageUrl    String?
   category    String
-  farmerName  String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  unit        String   @default("kg")   // kg | piece | dozen | bundle | litre | gram
+
+  // Farm-product fields
+  harvestDate DateTime?
+  isOrganic   Boolean  @default(false)
+
+  // Artisan/handmade fields
+  isHandmade  Boolean  @default(false)
+  craftType   String?   // Pottery | Textile | Bamboo | Woodwork | Jewellery | Other
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
   cartItems   CartItem[]
   orderItems  OrderItem[]
+
+  @@index([farmerId])
 }
+
+// ─────────────────────────────────────────────
+//  CartItem
+//  Persisted cart — survives page refresh.
+//  Unique constraint prevents duplicate rows.
+// ─────────────────────────────────────────────
 
 model CartItem {
   id        Int     @id @default(autoincrement())
   userId    Int
   productId Int
-  quantity  Int
-  user      User    @relation(fields: [userId], references: [id])
-  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int     @default(1)
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
 }
+
+// ─────────────────────────────────────────────
+//  Order
+//  Placed by a CUSTOMER.
+//  Delivery coordinates saved so the route
+//  optimization engine can use real destinations.
+// ─────────────────────────────────────────────
 
 model Order {
-  id        Int         @id @default(autoincrement())
-  userId    Int
-  total     Float
-  status    OrderStatus @default(PENDING)
-  createdAt DateTime    @default(now())
-  user      User        @relation(fields: [userId], references: [id])
-  items     OrderItem[]
+  id              Int         @id @default(autoincrement())
+  userId          Int
+  total           Float
+  status          OrderStatus @default(PENDING)
+
+  // Delivery destination (captured at checkout)
+  deliveryAddress String?
+  deliveryLat     Float?
+  deliveryLng     Float?
+
+  createdAt       DateTime    @default(now())
+
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items           OrderItem[]
+
+  @@index([userId])
 }
 
+// ─────────────────────────────────────────────
+//  OrderItem
+//  Snapshot of product price at time of order.
+// ─────────────────────────────────────────────
+
 model OrderItem {
-  id        Int     @id @default(autoincrement())
+  id        Int         @id @default(autoincrement())
   orderId   Int
   productId Int
   quantity  Int
-  price     Float
-  order     Order   @relation(fields: [orderId], references: [id])
-  product   Product @relation(fields: [productId], references: [id])
+  price     Float       // Price at the time of order (snapshot)
+  status    OrderStatus @default(PENDING)
+
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// ─────────────────────────────────────────────
+//  VerificationToken
+//  Stores secure one-time verification tokens
+//  for email verification.
+// ─────────────────────────────────────────────
+
+model VerificationToken {
+  id         Int      @id @default(autoincrement())
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([identifier, token])
 }

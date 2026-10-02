@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Upload, ImagePlus } from "lucide-react"
+import { ArrowLeft, Upload, ImagePlus, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,17 +17,51 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { categories } from "@/lib/data"
+import { useLanguage } from "@/lib/LanguageContext"
 
 export default function NewProductPage() {
+  const { t } = useLanguage()
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     category: "",
     price: "",
     stock: "",
     description: "",
+    imageUrl: "",
   })
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    try {
+      const uploadData = new FormData()
+      uploadData.append("file", file)
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: uploadData,
+      })
+
+      if (res.ok) {
+        const { url } = await res.json()
+        setFormData((prev) => ({ ...prev, imageUrl: url }))
+      } else {
+        const data = await res.json()
+        window.alert(data.error || "Upload failed")
+        console.error("Upload failed", data.error)
+      }
+    } catch (err: any) {
+      window.alert(err.message || "An unexpected error occurred during upload.")
+      console.error(err)
+    } finally {
+      setIsUploading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,11 +77,13 @@ export default function NewProductPage() {
           price: parseFloat(formData.price),
           stock: parseInt(formData.stock),
           description: formData.description,
+          imageUrl: formData.imageUrl,
         }),
       })
 
       if (res.ok) {
         router.push("/farmer")
+        router.refresh()
       } else {
         console.error("Failed to create product")
       }
@@ -66,18 +102,18 @@ export default function NewProductPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="border-b border-border bg-secondary/30 py-8">
+      <div className="border-b border-[#6B8E23] bg-secondary/30 py-8">
         <div className="mx-auto max-w-7xl px-4 lg:px-8">
           <Link
             href="/farmer"
             className="mb-4 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
+            {t("Back to Dashboard")}
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight">Add New Product</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("Add New Product")}</h1>
           <p className="mt-2 text-muted-foreground">
-            List a new product for customers to purchase
+            {t("List a new product for customers to purchase")}
           </p>
         </div>
       </div>
@@ -89,22 +125,43 @@ export default function NewProductPage() {
             {/* Product Image */}
             <Card>
               <CardHeader>
-                <CardTitle>Product Image</CardTitle>
+                <CardTitle>{t("Product Image")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30 p-12 transition-colors hover:border-primary/50">
+                <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-[#6B8E23] bg-muted/30 p-12 transition-colors hover:border-primary/50 relative">
                   <div className="mb-4 rounded-full bg-primary/10 p-4">
-                    <ImagePlus className="h-8 w-8 text-primary" />
+                    {formData.imageUrl ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={formData.imageUrl} alt="Preview" className="h-20 w-20 object-cover rounded-md" />
+                    ) : (
+                      <ImagePlus className="h-8 w-8 text-primary" />
+                    )}
                   </div>
                   <p className="mb-2 text-sm font-medium">
-                    Drag and drop your image here
+                    {formData.imageUrl ? t("Drag to replace image") : t("Drag and drop your image here")}
                   </p>
                   <p className="mb-4 text-xs text-muted-foreground">
-                    PNG, JPG up to 5MB
+                    {t("PNG, JPG up to 5MB")}
                   </p>
-                  <Button type="button" variant="outline" className="gap-2">
-                    <Upload className="h-4 w-4" />
-                    Choose File
+                  <Button type="button" variant="outline" className="gap-2 relative">
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {t("Uploading...")}
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        {t("Choose File")}
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={isUploading}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
                   </Button>
                 </div>
               </CardContent>
@@ -113,16 +170,16 @@ export default function NewProductPage() {
             {/* Product Details */}
             <Card>
               <CardHeader>
-                <CardTitle>Product Details</CardTitle>
+                <CardTitle>{t("Product Details")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
 
                 <div className="space-y-2">
-                  <Label htmlFor="name">Product Name</Label>
+                  <Label htmlFor="name">{t("Product Name")}</Label>
                   <Input
                     id="name"
                     name="name"
-                    placeholder="e.g., Organic Tomatoes"
+                    placeholder={t("e.g., Organic Tomatoes")}
                     value={formData.name}
                     onChange={handleChange}
                     required
@@ -130,7 +187,7 @@ export default function NewProductPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
+                  <Label htmlFor="category">{t("Category")}</Label>
                   <Select
                     value={formData.category}
                     onValueChange={(value) =>
@@ -138,7 +195,7 @@ export default function NewProductPage() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a category" />
+                      <SelectValue placeholder={t("Select a category")} />
                     </SelectTrigger>
                     <SelectContent>
                       {categories
@@ -154,7 +211,7 @@ export default function NewProductPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="price">Price (₹ per kg)</Label>
+                    <Label htmlFor="price">{t("Price (₹ per kg)")}</Label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                         ₹
@@ -175,7 +232,7 @@ export default function NewProductPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="stock">Stock Quantity (kg)</Label>
+                    <Label htmlFor="stock">{t("Stock Quantity (kg)")}</Label>
                     <div className="relative">
                       <Input
                         id="stock"
@@ -195,11 +252,11 @@ export default function NewProductPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description">{t("Description")}</Label>
                   <Textarea
                     id="description"
                     name="description"
-                    placeholder="Describe your product, including growing methods, freshness, and any special qualities..."
+                    placeholder={t("Describe your product, including growing methods, freshness, and any special qualities...")}
                     rows={4}
                     value={formData.description}
                     onChange={handleChange}
@@ -213,23 +270,23 @@ export default function NewProductPage() {
             {/* Farming Practices */}
             <Card>
               <CardHeader>
-                <CardTitle>Farming Practices</CardTitle>
+                <CardTitle>{t("Farming Practices")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {[
-                    { label: "Certified Organic", desc: "USDA certified organic produce" },
-                    { label: "No Pesticides", desc: "Grown without synthetic pesticides" },
-                    { label: "Non-GMO", desc: "Non-genetically modified" },
-                    { label: "Sustainably Grown", desc: "Eco-friendly farming practices" },
+                    { label: t("Certified Organic"), desc: t("USDA certified organic produce") },
+                    { label: t("No Pesticides"), desc: t("Grown without synthetic pesticides") },
+                    { label: t("Non-GMO"), desc: t("Non-genetically modified") },
+                    { label: t("Sustainably Grown"), desc: t("Eco-friendly farming practices") },
                   ].map((practice) => (
                     <label
                       key={practice.label}
-                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-border p-4 transition-colors hover:bg-muted/50"
+                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#6B8E23] p-4 transition-colors hover:bg-muted/50"
                     >
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                        className="h-4 w-4 rounded border-[#6B8E23] text-primary focus:ring-primary"
                       />
                       <div>
                         <p className="font-medium">{practice.label}</p>
@@ -245,7 +302,7 @@ export default function NewProductPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:justify-end">
               <Link href="/farmer">
                 <Button type="button" variant="outline" className="w-full sm:w-auto">
-                  Cancel
+                  {t("Cancel")}
                 </Button>
               </Link>
               <Button
@@ -253,7 +310,7 @@ export default function NewProductPage() {
                 disabled={isSubmitting}
                 className="w-full sm:w-auto"
               >
-                {isSubmitting ? "Adding Product..." : "Add Product"}
+                {isSubmitting ? t("Adding Product...") : t("Add Product")}
               </Button>
             </div>
 

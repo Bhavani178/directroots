@@ -1,10 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      // Unsplash (existing seed/demo images)
+      { protocol: "https", hostname: "images.unsplash.com" },
+      // Cloudinary (uploaded product/profile images)
+      { protocol: "https", hostname: "res.cloudinary.com" },
+      // Unpkg (Leaflet marker icons)
+      { protocol: "https", hostname: "unpkg.com" },
+    ],
   },
 }
 

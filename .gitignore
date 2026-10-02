@@ -16,3 +16,13 @@ __v0_jsx-dev-runtime.ts
 .env
 node_modules
 .next
+dev.db
+prisma/dev.db
+# Temporary Debug Files
+debug_*.ts
+measure_perf*.ts
+scratch_*.ts
+implementation_plan_phase_2.md
+app/test/
+
+tsconfig.tsbuildinfo
