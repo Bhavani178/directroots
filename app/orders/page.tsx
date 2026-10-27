@@ -4,7 +4,8 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import useSWR from "swr"
-import { Package, ChefHat, ArrowRight, Loader2 } from "lucide-react"
+import { useSession } from "next-auth/react"
+import { Package, ChefHat, ArrowRight, Loader2, CheckCircle2, IndianRupee, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useLanguage } from "@/lib/LanguageContext"
@@ -27,11 +28,13 @@ const fetcher = (url: string) => fetch(url).then((res) => {
 
 export default function OrdersPage() {
   const { t } = useLanguage()
+  const { data: session } = useSession()
   const { data, error, isLoading } = useSWR("/api/orders", fetcher, {
     revalidateOnFocus: true,
   })
 
   const orders = Array.isArray(data) ? data : []
+  const customerName = session?.user?.name || session?.user?.email || "Customer"
 
   if (isLoading) {
     return (
@@ -60,6 +63,7 @@ export default function OrdersPage() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen">
+        {/* Header */}
         <div className="border-b border-[#6B8E23] bg-secondary/30 py-8">
           <div className="mx-auto max-w-7xl px-4 lg:px-8">
             <h1 className="text-3xl font-bold tracking-tight">{t("Your Orders")}</h1>
@@ -67,25 +71,74 @@ export default function OrdersPage() {
           </div>
         </div>
 
+        {/* Customer Info Banner */}
+        <div className="bg-[#6B8E23]/10 border-b border-[#6B8E23]/30">
+          <div className="mx-auto max-w-7xl px-4 py-4 lg:px-8">
+            <div className="flex flex-wrap items-center gap-6">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#6B8E23] text-white">
+                  <User className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{t("Customer")}</p>
+                  <p className="font-semibold text-foreground text-lg">{customerName}</p>
+                </div>
+              </div>
+              <div className="h-10 w-px bg-[#6B8E23]/30 hidden sm:block" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{t("Total Orders")}</p>
+                <p className="font-semibold text-foreground text-lg">{orders.length}</p>
+              </div>
+              <div className="h-10 w-px bg-[#6B8E23]/30 hidden sm:block" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{t("Total Spent")}</p>
+                <p className="font-semibold text-[#6B8E23] text-lg">
+                  ₹{orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0).toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="mx-auto max-w-7xl px-4 py-8 lg:px-8">
           <div className="space-y-6">
             {orders.map((order: any) => (
-              <Card key={order.id}>
-                <CardHeader className="pb-4">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <Card key={order.id} className="overflow-hidden">
+                <CardHeader className="pb-4 bg-card">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <CardTitle className="text-lg">ORD-{String(order.id).padStart(3, "0")}</CardTitle>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-[#6B8E23]" />
+                        ORD-{String(order.id).padStart(3, "0")}
+                      </CardTitle>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {t("Placed on")} {new Date(order.createdAt).toLocaleDateString("en-IN", {
                           weekday: "long", year: "numeric", month: "long", day: "numeric",
                         })}
                       </p>
+                      {/* Customer Name on Order */}
+                      <div className="mt-2 flex items-center gap-2 rounded-md bg-[#6B8E23]/10 px-3 py-1.5 w-fit">
+                        <User className="h-3.5 w-3.5 text-[#6B8E23]" />
+                        <span className="text-xs font-semibold text-[#6B8E23]">{customerName}</span>
+                      </div>
                     </div>
-                    <span className={cn("font-medium", statusConfig[order.status]?.color)}>
-                      {t(statusConfig[order.status]?.label)}
-                    </span>
+
+                    {/* Amount Paid box */}
+                    <div className="flex flex-col items-end gap-2">
+                      <span className={cn("font-medium text-sm", statusConfig[order.status]?.color)}>
+                        ● {t(statusConfig[order.status]?.label)}
+                      </span>
+                      <div className="rounded-xl bg-[#6B8E23] px-4 py-2 text-white text-right shadow-md">
+                        <p className="text-xs font-medium uppercase tracking-wide opacity-80">{t("Amount Paid")}</p>
+                        <p className="text-2xl font-bold flex items-center gap-0.5">
+                          <IndianRupee className="h-5 w-5 inline" />
+                          {Number(order.total).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </CardHeader>
+
                 <CardContent className="space-y-6">
                   {/* Status bar */}
                   <div className="flex items-center justify-between">
@@ -122,7 +175,6 @@ export default function OrdersPage() {
                   <div>
                     <h4 className="mb-3 font-medium">{t("Order Details")}</h4>
                     <div className="space-y-6">
-                      {/* Group items by farmer */}
                       {(() => {
                         const farmerGroups = order.items.reduce((acc: any, item: any) => {
                           const farmerId = item.product?.farmer?.id || "unknown"
@@ -133,7 +185,7 @@ export default function OrdersPage() {
 
                         return Object.values(farmerGroups).map((group: any, idx) => (
                           <div key={idx} className="rounded-lg border border-[#6B8E23] bg-card overflow-hidden">
-                            {/* Farmer Header with Status */}
+                            {/* Farmer Header */}
                             <div className="flex items-center justify-between border-b border-[#6B8E23] bg-muted/30 px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <ChefHat className="h-4 w-4 text-muted-foreground" />
@@ -146,19 +198,19 @@ export default function OrdersPage() {
                                 {t(statusConfig[group.status]?.label) || group.status}
                               </span>
                             </div>
-                            
-                            {/* Farmer Items */}
+
+                            {/* Items */}
                             <div className="divide-y divide-border">
                               {group.items.map((item: any) => (
                                 <div key={item.id} className="flex items-center gap-4 p-3">
                                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-muted text-xs text-muted-foreground">
                                     {item.product?.imageUrl ? (
                                       <Image src={item.product.imageUrl} alt={item.product.name} width={48} height={48} className="rounded-md object-cover h-full w-full" />
-                                    ) : "No img"}
+                                    ) : "📦"}
                                   </div>
                                   <div className="flex-1">
                                     <p className="font-medium text-sm">{item.product?.name}</p>
-                                    <p className="text-xs text-muted-foreground">{t("Qty:")} {item.quantity} x ₹{item.price}</p>
+                                    <p className="text-xs text-muted-foreground">{t("Qty:")} {item.quantity} × ₹{item.price}</p>
                                   </div>
                                   <p className="font-semibold text-sm">₹{item.price * item.quantity}</p>
                                 </div>
@@ -170,9 +222,16 @@ export default function OrdersPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-[#6B8E23] pt-4">
-                    <span className="font-medium">{t("Total")}</span>
-                    <span className="text-xl font-bold text-primary">₹{order.total}</span>
+                  {/* Order Total row */}
+                  <div className="flex items-center justify-between rounded-xl bg-[#6B8E23]/10 border border-[#6B8E23]/30 px-6 py-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">{t("Customer")}</p>
+                      <p className="font-semibold text-foreground">{customerName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">{t("Amount Paid")}</p>
+                      <p className="text-2xl font-bold text-[#6B8E23]">₹{Number(order.total).toFixed(2)}</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

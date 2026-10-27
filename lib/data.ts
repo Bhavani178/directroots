@@ -4,8 +4,11 @@ export const categories = [
   "All",
   "Vegetables",
   "Fruits",
-  "Organic",
+  "Grains & Pulses",
+  "Dairy",
+  "Handlooms",
   "Handicrafts",
   "Village Products",
-  "Dairy",
+  "Spices & Herbs",
+  "Organic",
 ]

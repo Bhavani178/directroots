@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { signIn } from "next-auth/react"
+import { signIn, getSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Eye, EyeOff } from "lucide-react"
@@ -36,10 +36,12 @@ export default function LoginPage() {
       return
     }
 
-    const res = await fetch("/api/auth/session")
-    const session = await res.json()
+    const session = await getSession()
 
-    if (session?.user?.role === "FARMER") {
+    router.refresh()
+    if (session?.user?.role === "ADMIN") {
+      router.push("/admin")
+    } else if (session?.user?.role === "FARMER") {
       router.push("/farmer")
     } else {
       router.push("/marketplace")

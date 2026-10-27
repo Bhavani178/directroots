@@ -27,6 +27,9 @@ export function Header() {
     ...(session?.user?.role === "FARMER"
       ? [{ name: t("Farmer Dashboard"), href: "/farmer" }]
       : []),
+    ...(session?.user?.role === "ADMIN"
+      ? [{ name: "🛡️ Admin Dashboard", href: "/admin" }]
+      : []),
   ]
 
   return (
@@ -117,6 +120,15 @@ export function Header() {
               {dropdownOpen && (
                 <div className="absolute right-0 mt-2 w-48 rounded-lg border border-[#6B8E23] bg-background text-foreground shadow-lg">
                   <div className="p-2">
+                    {session.user.role === "ADMIN" && (
+                      <Link
+                        href="/admin"
+                        className="block rounded-md px-3 py-2 text-sm font-semibold text-emerald-600 hover:bg-muted"
+                        onClick={() => setDropdownOpen(false)}
+                      >
+                        🛡️ Admin Dashboard
+                      </Link>
+                    )}
                     {session.user.role === "FARMER" && (
                       <Link
                         href="/farmer"

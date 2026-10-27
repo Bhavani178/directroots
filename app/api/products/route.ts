@@ -54,26 +54,35 @@ export async function GET(req: Request) {
     }
   }
 
-  // Check if customer location is confirmed
-  const userHasLocation = hasConfirmedLocation({ lat, lng })
-
-  // If customer has no confirmed location and is browsing (not specific seller filter):
-  if (!userHasLocation && !farmerIdQ) {
-    return NextResponse.json({
-      products: [],
-      total: 0,
-      needsLocation: true,
-      message: "Set your location to see sellers near you",
-    })
+  // Default to Bidar regional hub coordinates if customer coordinates not provided
+  if (lat === null || lng === null) {
+    lat = 17.9104
+    lng = 77.5199
   }
 
   const page  = searchParams.get("page")  ? Math.max(1, parseInt(searchParams.get("page")!)) : 1
-  const limit = searchParams.get("limit") ? Math.min(100, Math.max(1, parseInt(searchParams.get("limit")!))) : 50
+  const limit = searchParams.get("limit") ? Math.min(500, Math.max(1, parseInt(searchParams.get("limit")!))) : 300
   const skip  = (page - 1) * limit
 
   const conditions: Prisma.Sql[] = [Prisma.sql`1=1`]
 
-  if (category && category !== "All") conditions.push(Prisma.sql`p."category" = ${category}`)
+  if (category && category !== "All") {
+    if (category === "Organic") {
+      conditions.push(Prisma.sql`p."isOrganic" = true`)
+    } else if (category === "Handlooms") {
+      conditions.push(Prisma.sql`(p."category" = 'Handlooms' OR p."craftType" = 'Textile')`)
+    } else if (category === "Handicrafts") {
+      conditions.push(Prisma.sql`(p."category" = 'Handicrafts' OR p."category" = 'Handmade Crafts')`)
+    } else if (category === "Village Products") {
+      conditions.push(Prisma.sql`p."category" IN ('Village Products', 'Oils & Honey', 'Pickles & Processed')`)
+    } else if (category === "Grains & Pulses") {
+      conditions.push(Prisma.sql`p."category" IN ('Grains & Pulses', 'Grains & Cereals')`)
+    } else if (category === "Spices & Herbs") {
+      conditions.push(Prisma.sql`p."category" IN ('Spices & Herbs', 'Spices')`)
+    } else {
+      conditions.push(Prisma.sql`p."category" = ${category}`)
+    }
+  }
   if (farmerIdQ) conditions.push(Prisma.sql`p."farmerId" = ${parseInt(farmerIdQ)}`)
   if (organic) conditions.push(Prisma.sql`p."isOrganic" = true`)
   if (handmade) conditions.push(Prisma.sql`p."isHandmade" = true`)
@@ -98,13 +107,6 @@ export async function GET(req: Request) {
         sin(radians(${lat})) * sin(radians(u."lat"))
       ))
     )) AS "distanceKm"`
-
-    // Bounding box for index optimization
-    const deltaLat = kmToDegreeDelta(MAX_FARM_DELIVERY_KM)
-    const deltaLng = kmToDegreeDelta(MAX_FARM_DELIVERY_KM)
-    
-    conditions.push(Prisma.sql`u."lat" >= ${lat - deltaLat} AND u."lat" <= ${lat + deltaLat}`)
-    conditions.push(Prisma.sql`u."lng" >= ${lng - deltaLng} AND u."lng" <= ${lng + deltaLng}`)
 
     if (sort === "nearest") orderByClause = Prisma.sql`ORDER BY "distanceKm" ASC`
     else if (sort === "price_asc") orderByClause = Prisma.sql`ORDER BY p."price" ASC`
@@ -161,10 +163,7 @@ export async function GET(req: Request) {
     }
   }))
 
-  // Final rigorous distance filter in case the bounding box let corner cases through
-  if (lat !== null && lng !== null) {
-    paginated = paginated.filter(p => p.distanceKm !== null && p.distanceKm <= MAX_FARM_DELIVERY_KM)
-  }
+
 
   return NextResponse.json(paginated)
 }

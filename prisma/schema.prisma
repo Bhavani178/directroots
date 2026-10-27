@@ -15,6 +15,7 @@ enum Role {
   CUSTOMER
   FARMER
   ARTISAN
+  ADMIN
 }
 
 enum OrderStatus {

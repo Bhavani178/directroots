@@ -25,7 +25,7 @@ export default function MarketplacePage() {
 
     async function loadProducts() {
       // 1. Immediately fetch products (backend checks session location automatically)
-      const res = await fetch("/api/products")
+      const res = await fetch("/api/products?limit=300")
       let data = await res.json()
 
       // 2. If backend says it needs a location, try browser geolocation (quick 2s timeout)
@@ -36,7 +36,7 @@ export default function MarketplacePage() {
           })
           
           // Re-fetch products with the newly acquired browser coordinates
-          const geoRes = await fetch(`/api/products?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}&sort=nearest`)
+          const geoRes = await fetch(`/api/products?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}&sort=nearest&limit=300`)
           data = await geoRes.json()
         } catch (e) {
           console.warn("Geolocation failed, denied, or timed out")
@@ -59,9 +59,47 @@ export default function MarketplacePage() {
     const farmerLabel = (product.farmer?.farmName ?? product.farmer?.name ?? "").toLowerCase()
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      farmerLabel.includes(searchQuery.toLowerCase())
-    const matchesCategory =
-      selectedCategory === "All" || product.category === selectedCategory
+      farmerLabel.includes(searchQuery.toLowerCase()) ||
+      (product.category && product.category.toLowerCase().includes(searchQuery.toLowerCase()))
+    const cat = (product.category || "").toLowerCase()
+    const sel = selectedCategory.toLowerCase()
+
+    let matchesCategory = false
+    if (selectedCategory === "All") {
+      matchesCategory = true
+    } else if (selectedCategory === "Organic") {
+      matchesCategory = Boolean(product.isOrganic)
+    } else if (selectedCategory === "Dairy") {
+      matchesCategory = cat.includes("dairy") || product.name.toLowerCase().includes("milk") || product.name.toLowerCase().includes("paneer") || product.name.toLowerCase().includes("ghee") || product.name.toLowerCase().includes("curd") || product.name.toLowerCase().includes("butter")
+    } else if (selectedCategory === "Grains & Pulses") {
+      matchesCategory = cat.includes("grain") || cat.includes("pulse") || cat.includes("cereal")
+    } else if (selectedCategory === "Spices & Herbs") {
+      matchesCategory = cat.includes("spice") || cat.includes("herb")
+    } else if (selectedCategory === "Handlooms") {
+      matchesCategory =
+        cat.includes("handloom") ||
+        product.craftType === "Textile" ||
+        product.name.toLowerCase().includes("saree") ||
+        product.name.toLowerCase().includes("kurta") ||
+        product.name.toLowerCase().includes("dhoti") ||
+        product.name.toLowerCase().includes("dupatta")
+    } else if (selectedCategory === "Handicrafts") {
+      // Strictly handicrafts — exclude food, pickles, fruits and vegetables
+      matchesCategory =
+        (cat.includes("handicraft") || cat.includes("handmade craft")) &&
+        !cat.includes("fruit") &&
+        !cat.includes("vegetable") &&
+        !cat.includes("pickle") &&
+        !cat.includes("village")
+    } else if (selectedCategory === "Village Products") {
+      matchesCategory = cat.includes("village") || cat.includes("oil") || cat.includes("honey") || cat.includes("pickle") || cat.includes("jaggery")
+    } else if (selectedCategory === "Fruits") {
+      matchesCategory = cat.includes("fruit")
+    } else if (selectedCategory === "Vegetables") {
+      matchesCategory = cat.includes("vegetable")
+    } else {
+      matchesCategory = cat === sel
+    }
     return matchesSearch && matchesCategory
   })
 

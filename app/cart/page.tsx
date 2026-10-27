@@ -3,12 +3,12 @@
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react"
+import { useSession } from "next-auth/react"
+import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, User, MapPin, ShieldCheck, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useCart } from "@/lib/cart-context"
 import { useLanguage } from "@/lib/LanguageContext"
-
 import { useState } from "react"
 import dynamic from "next/dynamic"
 
@@ -20,11 +20,16 @@ const LocationPicker = dynamic(() => import("@/components/location-picker"), {
 export default function CartPage() {
   const { items, updateQuantity, removeFromCart, total, clearCart } = useCart()
   const { t } = useLanguage()
+  const { data: session } = useSession()
   const router = useRouter()
   const [showLocationPicker, setShowLocationPicker] = useState(false)
   const [confirmedPin, setConfirmedPin] = useState<{ lat: number; lng: number; address?: string } | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const customerName = session?.user?.name || session?.user?.email || "Customer"
+  const deliveryCharge = total >= 500 ? 0 : 40
+  const grandTotal = total + deliveryCharge
 
   const handleConfirmCheckoutLocation = async (lat: number, lng: number, addressText?: string) => {
     setConfirmedPin({ lat, lng, address: addressText })
@@ -57,11 +62,6 @@ export default function CartPage() {
     }
   }
 
-  const handleCheckoutClick = () => {
-    setShowLocationPicker(true)
-  }
-  
-
   if (items.length === 0) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 py-16">
@@ -84,6 +84,7 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen">
+      {/* Page Header */}
       <div className="border-b border-[#6B8E23] bg-secondary/30 py-8">
         <div className="mx-auto max-w-7xl px-4 lg:px-8">
           <h1 className="text-3xl font-bold tracking-tight">{t("Shopping Cart")}</h1>
@@ -95,14 +96,15 @@ export default function CartPage() {
 
       <div className="mx-auto max-w-7xl px-4 py-8 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-3">
-          {/* Cart Items */}
+
+          {/* ── Left: Cart Items ── */}
           <div className="lg:col-span-2">
             <div className="space-y-4">
               {items.map((item) => (
                 <Card key={item.id}>
                   <CardContent className="p-4">
                     <div className="flex gap-4">
-                      <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg">
+                      <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border">
                         <Image
                           src={item.imageUrl || "/placeholder.svg"}
                           alt={item.name}
@@ -121,6 +123,9 @@ export default function CartPage() {
                                   ? item.farmer
                                   : (item.farmer?.farmName ?? item.farmer?.name ?? item.farmer_name ?? "")}
                               </p>
+                              <p className="mt-1 text-sm font-medium text-[#6B8E23]">
+                                ₹{item.price} / {item.unit ?? "kg"}
+                              </p>
                             </div>
                             <Button
                               variant="ghost"
@@ -138,29 +143,21 @@ export default function CartPage() {
                               variant="outline"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() =>
-                                updateQuantity(item.cartItemId, item.quantity - 1)
-                              }
+                              onClick={() => updateQuantity(item.cartItemId, item.quantity - 1)}
                             >
                               <Minus className="h-4 w-4" />
                             </Button>
-                            <span className="w-8 text-center font-medium">
-                              {item.quantity}
-                            </span>
+                            <span className="w-8 text-center font-medium">{item.quantity}</span>
                             <Button
                               variant="outline"
                               size="icon"
                               className="h-8 w-8"
-                              onClick={() =>
-                                updateQuantity(item.cartItemId, item.quantity + 1)
-                              }
+                              onClick={() => updateQuantity(item.cartItemId, item.quantity + 1)}
                             >
                               <Plus className="h-4 w-4" />
                             </Button>
                           </div>
-                          <p className="font-semibold text-primary">
-                            ₹{item.price * item.quantity}
-                          </p>
+                          <p className="font-bold text-primary text-lg">₹{item.price * item.quantity}</p>
                         </div>
                       </div>
                     </div>
@@ -170,56 +167,130 @@ export default function CartPage() {
             </div>
           </div>
 
-          {/* Order Summary */}
+          {/* ── Right: Order Summary (Amazon-style) ── */}
           <div>
-            <Card className="sticky top-24">
-              <CardContent className="p-6">
-                <h2 className="mb-4 text-lg font-semibold">{t("Order Summary")}</h2>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t("Subtotal")}</span>
-                    <span>₹{total}</span>
+            <Card className="sticky top-24 overflow-hidden border border-[#6B8E23]/40">
+              {/* Header */}
+              <div className="bg-[#6B8E23] px-5 py-3">
+                <h2 className="text-base font-bold text-white tracking-wide">{t("Order Summary")}</h2>
+              </div>
+
+              <CardContent className="p-5 space-y-4">
+
+                {/* ── Customer Info ── */}
+                <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <User className="h-3.5 w-3.5" />
+                    {t("Delivering To")}
                   </div>
+                  <p className="font-bold text-foreground text-base">{customerName}</p>
+                  {session?.user?.email && session.user.email !== customerName && (
+                    <p className="text-xs text-muted-foreground">{session.user.email}</p>
+                  )}
+                  <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-[#6B8E23]" />
+                    <span>{confirmedPin?.address || t("Pin your delivery location below")}</span>
+                  </div>
+                </div>
+
+                {/* ── Items in Order ── */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    <Package className="h-3.5 w-3.5" />
+                    {t("Items Ordered")} ({items.length})
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {items.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="relative h-8 w-8 shrink-0 rounded overflow-hidden border border-border">
+                            <Image
+                              src={item.imageUrl || "/placeholder.svg"}
+                              alt={item.name}
+                              fill
+                              sizes="32px"
+                              className="object-cover"
+                            />
+                          </div>
+                          <span className="truncate text-foreground">{item.name}</span>
+                          <span className="shrink-0 text-muted-foreground">× {item.quantity}</span>
+                        </div>
+                        <span className="shrink-0 font-medium">₹{item.price * item.quantity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── Price Breakdown ── */}
+                <div className="border-t border-border pt-3 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t("Delivery")}</span>
-                    <span className={total >= 35 ? "text-primary" : ""}>
-                      {total >= 500 ? t("Free") : "₹40"}
+                    <span className="text-muted-foreground">
+                      {t("Subtotal")} ({items.reduce((s, i) => s + i.quantity, 0)} {t("items")})
                     </span>
+                    <span className="font-medium">₹{total.toFixed(2)}</span>
                   </div>
+
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t("Delivery Charge")}</span>
+                    {deliveryCharge === 0 ? (
+                      <span className="font-medium text-[#6B8E23]">{t("FREE")}</span>
+                    ) : (
+                      <span className="font-medium">₹{deliveryCharge}</span>
+                    )}
+                  </div>
+
                   {total < 500 && (
-                    <p className="text-xs text-muted-foreground">
-                      {t("Add ₹")}{500 - total}{t("more for free delivery")}
+                    <p className="text-xs text-[#6B8E23] bg-[#6B8E23]/10 rounded px-2 py-1">
+                      🎉 {t("Add")} ₹{(500 - total).toFixed(2)} {t("more for FREE delivery")}
                     </p>
                   )}
-                  <div className="border-t border-[#6B8E23] pt-3">
-                    <div className="flex justify-between font-semibold">
-                      <span>{t("Total")}</span>
-                      <span className="text-primary">
-                        ₹{total + (total >= 500 ? 0 : 40)}
-                      </span>
-                    </div>
+
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t("Discount")}</span>
+                    <span className="font-medium text-[#6B8E23]">₹0.00</span>
                   </div>
                 </div>
-                <div className="mt-4 rounded-lg bg-[#6B8E23]/20 p-4 text-sm text-[#6B8E23]">
-                  {t("🚚 Eco Delivery Available")}
 
-                  {t("Your order qualifies for grouped local delivery, reducing fuel consumption and pollution.")}
+                {/* ── Grand Total ── */}
+                <div className="rounded-lg bg-[#6B8E23] px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-white/80 font-medium uppercase tracking-wide">{t("Total Amount")}</p>
+                    <p className="text-xs text-white/60">{t("Inclusive of all charges")}</p>
+                  </div>
+                  <p className="text-2xl font-bold text-white">₹{grandTotal.toFixed(2)}</p>
                 </div>
+
+                {/* ── Eco Badge ── */}
+                <div className="rounded-lg bg-[#6B8E23]/10 border border-[#6B8E23]/30 p-3 text-xs text-[#6B8E23] flex gap-2">
+                  <span className="text-base shrink-0">🚚</span>
+                  <span>{t("Eco Delivery — grouped local delivery reduces fuel consumption and carbon emissions.")}</span>
+                </div>
+
+                {/* ── Safe Checkout Badge ── */}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center">
+                  <ShieldCheck className="h-4 w-4 text-[#6B8E23]" />
+                  {t("Safe & Secure Checkout")}
+                </div>
+
+                {/* ── Checkout / Location Picker ── */}
                 {!showLocationPicker ? (
                   <>
                     {checkoutError && (
-                      <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+                      <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
                         {checkoutError}
                       </div>
                     )}
-                    <Button className="mt-6 w-full gap-2" onClick={handleCheckoutClick}>
+                    <Button className="w-full gap-2 text-base py-5 font-bold" onClick={() => setShowLocationPicker(true)}>
                       {t("Proceed to Checkout")}
                       <ArrowRight className="h-4 w-4" />
                     </Button>
                   </>
                 ) : (
-                  <div className="mt-6 space-y-3 border-t border-[#6B8E23] pt-4">
-                    <h3 className="text-sm font-semibold text-foreground">{t("Confirm Delivery Location Pin")}</h3>
+                  <div className="space-y-3 border-t border-[#6B8E23] pt-4">
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-[#6B8E23]" />
+                      {t("Confirm Delivery Location Pin")}
+                    </h3>
                     {checkoutError && (
                       <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
                         {checkoutError}
@@ -236,10 +307,11 @@ export default function CartPage() {
                 )}
 
                 <Link href="/marketplace">
-                  <Button variant="ghost" className="mt-2 w-full">
-                    {t("Continue Shopping")}
+                  <Button variant="ghost" className="w-full text-sm">
+                    ← {t("Continue Shopping")}
                   </Button>
                 </Link>
+
               </CardContent>
             </Card>
           </div>

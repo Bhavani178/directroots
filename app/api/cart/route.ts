@@ -2,20 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "../auth/[...nextauth]/route"
-import { MAX_FARM_DELIVERY_KM } from "@/lib/config"
-import { hasConfirmedLocation } from "@/lib/location"
 
-function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const R = 6371
-  const dLat = ((lat2 - lat1) * Math.PI) / 180
-  const dLng = ((lng2 - lng1) * Math.PI) / 180
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-    Math.cos((lat2 * Math.PI) / 180) *
-    Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
 
 // ─── GET /api/cart ────────────────────────────────────────────────────────────
 // Returns all cart items for the logged-in user.
@@ -74,29 +61,6 @@ export async function POST(req: Request) {
   })
   if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 })
   if (product.stock < 1) return NextResponse.json({ error: "Out of stock" }, { status: 400 })
-
-  // Verify customer delivery location & 50km service radius restriction
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { lat: true, lng: true },
-  })
-
-  if (!hasConfirmedLocation(user)) {
-    return NextResponse.json(
-      { error: "Please set and confirm your delivery location on the map before adding items to cart." },
-      { status: 400 }
-    )
-  }
-
-  if (product.farmer.lat && product.farmer.lng) {
-    const distanceKm = haversine(user!.lat!, user!.lng!, product.farmer.lat, product.farmer.lng)
-    if (distanceKm > MAX_FARM_DELIVERY_KM) {
-      return NextResponse.json(
-        { error: `Seller is beyond your ${MAX_FARM_DELIVERY_KM} km local service radius (${distanceKm.toFixed(1)} km away).` },
-        { status: 400 }
-      )
-    }
-  }
 
   const pId = parseInt(productId)
   const item = await prisma.cartItem.upsert({

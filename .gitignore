@@ -26,3 +26,8 @@ implementation_plan_phase_2.md
 app/test/
 
 tsconfig.tsbuildinfo
+__pycache__/
+*.pyc
+*.py
+scripts/
+project_report/
