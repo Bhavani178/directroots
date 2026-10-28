@@ -68,7 +68,7 @@ export async function GET(req: Request) {
   const limit    = (!isNaN(rawLimit) && rawLimit > 0 && rawLimit <= 500) ? rawLimit : 300
   const skip     = (page - 1) * limit
 
-  const conditions: Prisma.Sql[] = [Prisma.sql`1=1`]
+  const conditions: Prisma.Sql[] = [Prisma.sql`p."stock" > 0`]
 
   if (category && category !== "All") {
     if (category === "Organic") {
