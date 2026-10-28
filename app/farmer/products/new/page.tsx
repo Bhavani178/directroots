@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Upload, ImagePlus, Loader2 } from "lucide-react"
+import { ArrowLeft, Upload, ImagePlus, Loader2, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -18,12 +18,14 @@ import {
 } from "@/components/ui/select"
 import { categories } from "@/lib/data"
 import { useLanguage } from "@/lib/LanguageContext"
+import { toast } from "sonner"
 
 export default function NewProductPage() {
   const { t } = useLanguage()
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [locationConfirmed, setLocationConfirmed] = useState<boolean | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     category: "",
@@ -32,6 +34,22 @@ export default function NewProductPage() {
     description: "",
     imageUrl: "",
   })
+
+  // Check if farmer has confirmed their GPS location on profile
+  useEffect(() => {
+    fetch("/api/profile")
+      .then((r) => r.json())
+      .then((data) => {
+        const lat = data?.lat
+        const lng = data?.lng
+        const hasLocation =
+          lat != null &&
+          lng != null &&
+          !(Math.abs(lat - 17.91331) < 0.0001 && Math.abs(lng - 77.53011) < 0.0001)
+        setLocationConfirmed(hasLocation)
+      })
+      .catch(() => setLocationConfirmed(false))
+  }, [])
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -50,13 +68,14 @@ export default function NewProductPage() {
       if (res.ok) {
         const { url } = await res.json()
         setFormData((prev) => ({ ...prev, imageUrl: url }))
+        toast.success("Image uploaded successfully!")
       } else {
-        const data = await res.json()
-        window.alert(data.error || "Upload failed")
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || "Upload failed")
         console.error("Upload failed", data.error)
       }
     } catch (err: any) {
-      window.alert(err.message || "An unexpected error occurred during upload.")
+      toast.error(err.message || "An unexpected error occurred during upload.")
       console.error(err)
     } finally {
       setIsUploading(false)
@@ -82,13 +101,17 @@ export default function NewProductPage() {
       })
 
       if (res.ok) {
+        toast.success("Product created successfully!")
         router.push("/farmer")
         router.refresh()
       } else {
-        console.error("Failed to create product")
+        const errData = await res.json().catch(() => ({}))
+        toast.error(errData.error || "Failed to create product")
+        console.error("Failed to create product", errData.error)
       }
     } catch (err) {
       console.error(err)
+      toast.error("An error occurred while creating product")
     } finally {
       setIsSubmitting(false)
     }
@@ -119,6 +142,25 @@ export default function NewProductPage() {
       </div>
 
       <div className="mx-auto max-w-3xl px-4 py-8 lg:px-8">
+        {/* Location warning — shown if farm GPS not confirmed */}
+        {locationConfirmed === false && (
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-orange-400 bg-orange-50 p-4 text-orange-800">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-orange-500" />
+            <div>
+              <p className="font-semibold">Farm location not set</p>
+              <p className="mt-1 text-sm">
+                You must pin your farm location on the map before you can list products.
+                Customers within 50 km of your farm will be able to purchase from you.
+              </p>
+              <Link
+                href="/profile"
+                className="mt-2 inline-block text-sm font-medium underline hover:text-orange-900"
+              >
+                Go to Profile → Set Farm Location
+              </Link>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSubmit}>
           <div className="space-y-6">
 
@@ -307,8 +349,9 @@ export default function NewProductPage() {
               </Link>
               <Button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || locationConfirmed === false}
                 className="w-full sm:w-auto"
+                title={locationConfirmed === false ? "Set your farm location on your profile first" : undefined}
               >
                 {isSubmitting ? t("Adding Product...") : t("Add Product")}
               </Button>

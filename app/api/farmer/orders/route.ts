@@ -92,7 +92,7 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Order not found or access denied" }, { status: 404 })
   }
 
-  // 1. Update only this farmer's items to the new status
+  // 1. Update this farmer's items in this order to the requested status
   await prisma.orderItem.updateMany({
     where: {
       orderId,

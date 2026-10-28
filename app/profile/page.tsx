@@ -121,7 +121,7 @@ export default function ProfilePage() {
         lat: formData.lat,
         lng: formData.lng,
         profileImage: formData.profileImage,
-        ...(session?.user?.role === "FARMER" && {
+        ...((session?.user?.role === "FARMER" || session?.user?.role === "ARTISAN") && {
           farmName: formData.farmName,
           bio: formData.bio,
         }),
@@ -142,7 +142,7 @@ export default function ProfilePage() {
           lng: data.lng ?? prev.lng,
         }))
         toast.success("Profile saved successfully!")
-        if (session?.user?.role === "FARMER") {
+        if (session?.user?.role === "FARMER" || session?.user?.role === "ARTISAN") {
           router.push("/farmer")
         } else {
           router.push("/marketplace")
@@ -167,7 +167,8 @@ export default function ProfilePage() {
     )
   }
 
-  const isFarmer = session?.user?.role === "FARMER"
+  const isSeller = session?.user?.role === "FARMER" || session?.user?.role === "ARTISAN"
+  const isArtisan = session?.user?.role === "ARTISAN"
 
   return (
     <div className="min-h-screen bg-secondary/10">
@@ -260,15 +261,15 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Farmer Only Fields */}
-          {isFarmer && (
+          {/* Seller Details (Farmer / Artisan) */}
+          {isSeller && (
             <Card>
               <CardHeader>
-                <CardTitle>{t("Farm Details")}</CardTitle>
+                <CardTitle>{isArtisan ? t("Workshop / Craft Details") : t("Farm Details")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="farmName">{t("Farm Name")}</Label>
+                  <Label htmlFor="farmName">{isArtisan ? t("Workshop / Brand Name") : t("Farm Name")}</Label>
                   <Input
                     id="farmName"
                     name="farmName"
@@ -277,7 +278,7 @@ export default function ProfilePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="bio">{t("About the Farm (Bio)")}</Label>
+                  <Label htmlFor="bio">{isArtisan ? t("About the Artisan / Craft") : t("About the Farm (Bio)")}</Label>
                   <Textarea
                     id="bio"
                     name="bio"

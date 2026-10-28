@@ -91,7 +91,7 @@ export default function OrdersPage() {
               </div>
               <div className="h-10 w-px bg-[#6B8E23]/30 hidden sm:block" />
               <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{t("Total Spent")}</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{t("Total Order Value")}</p>
                 <p className="font-semibold text-[#6B8E23] text-lg">
                   ₹{orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0).toFixed(2)}
                 </p>
@@ -123,16 +123,21 @@ export default function OrdersPage() {
                       </div>
                     </div>
 
-                    {/* Amount Paid box */}
+                    {/* Amount / Payment box */}
                     <div className="flex flex-col items-end gap-2">
                       <span className={cn("font-medium text-sm", statusConfig[order.status]?.color)}>
                         ● {t(statusConfig[order.status]?.label)}
                       </span>
                       <div className="rounded-xl bg-[#6B8E23] px-4 py-2 text-white text-right shadow-md">
-                        <p className="text-xs font-medium uppercase tracking-wide opacity-80">{t("Amount Paid")}</p>
+                        <p className="text-xs font-medium uppercase tracking-wide opacity-80">
+                          {order.status === "DELIVERED" ? t("Paid (COD)") : t("Pay on Delivery")}
+                        </p>
                         <p className="text-2xl font-bold flex items-center gap-0.5">
                           <IndianRupee className="h-5 w-5 inline" />
                           {Number(order.total).toFixed(2)}
+                        </p>
+                        <p className="text-[10px] text-white/80">
+                          {order.status === "DELIVERED" ? t("Payment Completed") : t("Cash/UPI upon delivery")}
                         </p>
                       </div>
                     </div>

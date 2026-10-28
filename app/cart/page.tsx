@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useCart } from "@/lib/cart-context"
 import { useLanguage } from "@/lib/LanguageContext"
+import { calculateOrderPricing } from "@/lib/pricing"
 import { useState } from "react"
 import dynamic from "next/dynamic"
 
@@ -28,8 +29,11 @@ export default function CartPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const customerName = session?.user?.name || session?.user?.email || "Customer"
-  const deliveryCharge = total >= 500 ? 0 : 40
-  const grandTotal = total + deliveryCharge
+  const pricing = calculateOrderPricing(
+    items.map((i) => ({ price: i.price, quantity: i.quantity }))
+  )
+  const deliveryCharge = pricing.deliveryFee
+  const grandTotal = pricing.grandTotal
 
   const handleConfirmCheckoutLocation = async (lat: number, lng: number, addressText?: string) => {
     setConfirmedPin({ lat, lng, address: addressText })
@@ -239,9 +243,9 @@ export default function CartPage() {
                     )}
                   </div>
 
-                  {total < 500 && (
+                  {!pricing.qualifiesForFreeDelivery && (
                     <p className="text-xs text-[#6B8E23] bg-[#6B8E23]/10 rounded px-2 py-1">
-                      🎉 {t("Add")} ₹{(500 - total).toFixed(2)} {t("more for FREE delivery")}
+                      🎉 {t("Add")} ₹{pricing.amountNeededForFreeDelivery.toFixed(2)} {t("more for FREE delivery")}
                     </p>
                   )}
 
@@ -264,6 +268,12 @@ export default function CartPage() {
                 <div className="rounded-lg bg-[#6B8E23]/10 border border-[#6B8E23]/30 p-3 text-xs text-[#6B8E23] flex gap-2">
                   <span className="text-base shrink-0">🚚</span>
                   <span>{t("Eco Delivery — grouped local delivery reduces fuel consumption and carbon emissions.")}</span>
+                </div>
+
+                {/* ── Payment Method Note ── */}
+                <div className="rounded-lg bg-secondary/50 p-2.5 text-xs text-muted-foreground flex items-center justify-between">
+                  <span className="font-medium text-foreground">{t("Payment Method")}</span>
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-400">💵 {t("Cash / Pay on Delivery")}</span>
                 </div>
 
                 {/* ── Safe Checkout Badge ── */}

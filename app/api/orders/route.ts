@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "../auth/[...nextauth]/route"
 import { MAX_FARM_DELIVERY_KM } from "@/lib/config"
 import { hasConfirmedLocation } from "@/lib/location"
+import { calculateOrderPricing } from "@/lib/pricing"
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
   const R = 6371
@@ -100,11 +101,18 @@ export async function POST(req: Request) {
           throw new Error(`Insufficient stock for product: ${item.product.name}`)
         }
 
-        if (item.product.farmer.lat && item.product.farmer.lng) {
-          const dist = haversine(finalLat, finalLng, item.product.farmer.lat, item.product.farmer.lng)
-          if (dist > MAX_FARM_DELIVERY_KM) {
-            throw new Error(`Product "${item.product.name}" from seller is beyond your ${MAX_FARM_DELIVERY_KM} km delivery radius (${dist.toFixed(1)} km away).`)
-          }
+        // Strict 50km radius validation: Reject if producer coordinates missing or out of delivery bounds
+        if (item.product.farmer.lat === null || item.product.farmer.lng === null) {
+          throw new Error(
+            `Producer "${item.product.farmer.farmName || item.product.farmer.name}" does not have verified farm coordinates. Delivery distance cannot be validated.`
+          )
+        }
+
+        const dist = haversine(finalLat, finalLng, item.product.farmer.lat, item.product.farmer.lng)
+        if (dist > MAX_FARM_DELIVERY_KM) {
+          throw new Error(
+            `Product "${item.product.name}" from ${item.product.farmer.farmName || item.product.farmer.name} is beyond your ${MAX_FARM_DELIVERY_KM} km delivery radius (${dist.toFixed(1)} km away).`
+          )
         }
 
         // Atomic stock decrement with concurrency check
@@ -121,18 +129,19 @@ export async function POST(req: Request) {
         }
       }
 
-      // 3. Compute total with 2 decimal place rounding
-      const rawTotal = cartItems.reduce(
-        (sum, item) => sum + item.product.price * item.quantity,
-        0
+      // 3. Compute authoritative pricing with server-side delivery fee calculation
+      const pricing = calculateOrderPricing(
+        cartItems.map((item) => ({
+          price: item.product.price,
+          quantity: item.quantity,
+        }))
       )
-      const total = Math.round(rawTotal * 100) / 100
 
-      // 4. Create order with snapshot prices
+      // 4. Create order with grandTotal and snapshot prices
       const newOrder = await tx.order.create({
         data: {
           userId,
-          total,
+          total: pricing.grandTotal,
           status: "PENDING",
           deliveryAddress: deliveryAddress ?? null,
           deliveryLat:     finalLat,

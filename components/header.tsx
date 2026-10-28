@@ -24,8 +24,8 @@ export function Header() {
     { name: t("Home"), href: "/" },
     { name: t("Marketplace"), href: "/marketplace" },
     { name: t("Orders"), href: "/orders" },
-    ...(session?.user?.role === "FARMER"
-      ? [{ name: t("Farmer Dashboard"), href: "/farmer" }]
+    ...(session?.user?.role === "FARMER" || session?.user?.role === "ARTISAN"
+      ? [{ name: session.user.role === "ARTISAN" ? t("Artisan Dashboard") : t("Farmer Dashboard"), href: "/farmer" }]
       : []),
     ...(session?.user?.role === "ADMIN"
       ? [{ name: "🛡️ Admin Dashboard", href: "/admin" }]
@@ -129,13 +129,13 @@ export function Header() {
                         🛡️ Admin Dashboard
                       </Link>
                     )}
-                    {session.user.role === "FARMER" && (
+                    {(session.user.role === "FARMER" || session.user.role === "ARTISAN") && (
                       <Link
                         href="/farmer"
                         className="block rounded-md px-3 py-2 text-sm hover:bg-muted"
                         onClick={() => setDropdownOpen(false)}
                       >
-                        {t("Farmer Dashboard")}
+                        {session.user.role === "ARTISAN" ? t("Artisan Dashboard") : t("Farmer Dashboard")}
                       </Link>
                     )}
                     <Link

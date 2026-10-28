@@ -50,7 +50,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-secondary/50 py-16 lg:py-24">
+      <section id="about" className="relative overflow-hidden bg-secondary/50 py-16 lg:py-24">
         <div className="mx-auto max-w-7xl px-4 lg:px-8">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <div className="space-y-8">
@@ -109,7 +109,7 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="py-16 lg:py-24">
+      <section id="features" className="py-16 lg:py-24">
         <div className="mx-auto max-w-7xl px-4 lg:px-8">
           <div className="mb-12 text-center">
             <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">

@@ -43,21 +43,27 @@ export async function PUT(req: Request) {
     const body = await req.json()
     const { name, farmName, bio, profileImage, address, lat, lng } = body
 
-    if (lat !== undefined && lat !== null && isNaN(parseFloat(lat))) {
-      return NextResponse.json({ error: "Valid latitude is required" }, { status: 400 })
+    if (lat !== undefined && lat !== null) {
+      const parsedLat = parseFloat(lat)
+      if (isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+        return NextResponse.json({ error: "Valid latitude (-90 to 90) is required" }, { status: 400 })
+      }
     }
-    if (lng !== undefined && lng !== null && isNaN(parseFloat(lng))) {
-      return NextResponse.json({ error: "Valid longitude is required" }, { status: 400 })
+    if (lng !== undefined && lng !== null) {
+      const parsedLng = parseFloat(lng)
+      if (isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+        return NextResponse.json({ error: "Valid longitude (-180 to 180) is required" }, { status: 400 })
+      }
     }
 
     const updated = await prisma.user.update({
       where: { id: parseInt(session.user.id) },
       data: {
-        ...(name         !== undefined && { name: name.trim() }),
-        ...(farmName     !== undefined && { farmName: farmName?.trim() || null }),
-        ...(bio          !== undefined && { bio: bio?.trim() || null }),
-        ...(profileImage !== undefined && { profileImage: profileImage?.trim() || null }),
-        ...(address      !== undefined && { address: address?.trim() || null }),
+        ...(name         !== undefined && { name: String(name).trim().slice(0, 100) }),
+        ...(farmName     !== undefined && { farmName: farmName ? String(farmName).trim().slice(0, 120) : null }),
+        ...(bio          !== undefined && { bio: bio ? String(bio).trim().slice(0, 1000) : null }),
+        ...(profileImage !== undefined && { profileImage: profileImage ? String(profileImage).trim() : null }),
+        ...(address      !== undefined && { address: address ? String(address).trim().slice(0, 300) : null }),
         ...(lat          !== undefined && { lat: lat !== null ? parseFloat(lat) : null }),
         ...(lng          !== undefined && { lng: lng !== null ? parseFloat(lng) : null }),
       },
@@ -74,25 +80,6 @@ export async function PUT(req: Request) {
         lng: true,
       },
     })
-
-    // Synchronize updated location to active/pending orders so farmer delivery maps reflect changes
-    if (lat !== undefined || lng !== undefined || address !== undefined) {
-      const newLat = lat !== undefined ? (lat !== null ? parseFloat(lat) : null) : undefined
-      const newLng = lng !== undefined ? (lng !== null ? parseFloat(lng) : null) : undefined
-      const newAddr = address !== undefined ? (address?.trim() || null) : undefined
-
-      await prisma.order.updateMany({
-        where: {
-          userId: parseInt(session.user.id),
-          status: { in: ["PENDING", "PREPARING", "OUT_FOR_DELIVERY"] },
-        },
-        data: {
-          ...(newLat !== undefined && { deliveryLat: newLat }),
-          ...(newLng !== undefined && { deliveryLng: newLng }),
-          ...(newAddr !== undefined && { deliveryAddress: newAddr }),
-        },
-      })
-    }
 
     return NextResponse.json(updated)
   } catch (error) {

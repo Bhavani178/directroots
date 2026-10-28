@@ -62,12 +62,12 @@ export default function DeliveryMapPage() {
       </div>
       <h2 className="text-xl font-semibold">{t("Delivery map unavailable")}</h2>
       <p className="max-w-sm text-muted-foreground">
-        {error === "Farmer location not set"
-          ? t("Your farm location hasn't been set yet. Set it in your profile so the route optimizer knows where deliveries start from.")
+        {(error === "Farmer location not set" || error === "Seller location not set")
+          ? t("Your location hasn't been set yet. Set it in your profile so the route optimizer knows where deliveries start from.")
           : error}
       </p>
       <div className="flex gap-3">
-        {error === "Farmer location not set" && (
+        {(error === "Farmer location not set" || error === "Seller location not set") && (
           <Link href="/profile">
             <Button className="gap-2">
               <Navigation className="h-4 w-4" />

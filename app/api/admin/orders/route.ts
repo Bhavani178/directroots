@@ -45,11 +45,23 @@ export async function PATCH(req: Request) {
     data: { status },
   })
 
-  // Synchronize item-level statuses so farmer and customer views stay 100% in sync
-  await prisma.orderItem.updateMany({
-    where: { orderId },
-    data: { status },
-  })
+  // Advance item-level statuses proportionally without downgrading advanced items
+  if (status === "DELIVERED") {
+    await prisma.orderItem.updateMany({
+      where: { orderId },
+      data: { status: "DELIVERED" },
+    })
+  } else if (status === "OUT_FOR_DELIVERY") {
+    await prisma.orderItem.updateMany({
+      where: { orderId, status: { in: ["PENDING", "PREPARING"] } },
+      data: { status: "OUT_FOR_DELIVERY" },
+    })
+  } else if (status === "PREPARING") {
+    await prisma.orderItem.updateMany({
+      where: { orderId, status: "PENDING" },
+      data: { status: "PREPARING" },
+    })
+  }
 
   return NextResponse.json(order)
 }

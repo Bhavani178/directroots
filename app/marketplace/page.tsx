@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Search, SlidersHorizontal, X } from "lucide-react"
+import { Search, SlidersHorizontal, X, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ProductCard } from "@/components/product-card"
@@ -17,6 +17,8 @@ export default function MarketplacePage() {
   const [showFilters, setShowFilters] = useState(false)
   const [products, setProducts] = useState<any[]>([])
   const [needsLocation, setNeedsLocation] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   useEffect(() => {
     // Read optional search query from URL
@@ -24,31 +26,38 @@ export default function MarketplacePage() {
     if (q) setSearchQuery(q)
 
     async function loadProducts() {
-      // 1. Immediately fetch products (backend checks session location automatically)
-      const res = await fetch("/api/products?limit=300")
-      let data = await res.json()
-
-      // 2. If backend says it needs a location, try browser geolocation (quick 2s timeout)
-      if (data && data.needsLocation && "geolocation" in navigator) {
-        try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 })
-          })
-          
-          // Re-fetch products with the newly acquired browser coordinates
-          const geoRes = await fetch(`/api/products?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}&sort=nearest&limit=300`)
-          data = await geoRes.json()
-        } catch (e) {
-          console.warn("Geolocation failed, denied, or timed out")
+      setIsLoading(true)
+      setFetchError(null)
+      try {
+        // 1. Immediately fetch products (backend checks session location automatically)
+        const res = await fetch("/api/products?limit=300")
+        if (!res.ok) {
+          throw new Error("Failed to load products")
         }
-      }
+        let data = await res.json()
 
-      if (data && data.needsLocation) {
-        setNeedsLocation(true)
-        setProducts([])
-      } else {
-        setNeedsLocation(false)
+        // 2. If browser geolocation is available, try to refine sort
+        if ("geolocation" in navigator && (!data || data.length === 0)) {
+          try {
+            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 })
+            })
+            
+            const geoRes = await fetch(`/api/products?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}&sort=nearest&limit=300`)
+            if (geoRes.ok) {
+              data = await geoRes.json()
+            }
+          } catch (e) {
+            console.warn("Geolocation failed, denied, or timed out")
+          }
+        }
+
         setProducts(Array.isArray(data) ? data : (data.products || []))
+      } catch (err: any) {
+        console.error("Failed to load products:", err)
+        setFetchError("Unable to load products. Please check your connection and try again.")
+      } finally {
+        setIsLoading(false)
       }
     }
 
@@ -222,20 +231,21 @@ export default function MarketplacePage() {
               </div>
             </div>
 
-            {needsLocation ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-[#6B8E23] bg-card p-8">
-                <div className="mb-4 rounded-full bg-primary/10 p-4">
-                  <Search className="h-8 w-8 text-primary" />
-                </div>
-                <h3 className="text-xl font-bold text-foreground">{t("Set your location to see sellers near you")}</h3>
-                <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                  {t("DirectRoots connects you with local farmers and artisans within a 50 km radius. Please set your delivery address or location in your profile to view nearby products.")}
-                </p>
-                <Link href="/profile">
-                  <Button className="mt-6 gap-2">
-                    {t("Set My Location")}
-                  </Button>
-                </Link>
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <Loader2 className="h-10 w-10 animate-spin text-primary mb-3" />
+                <p className="text-sm text-muted-foreground">{t("Finding fresh produce and local crafts near you...")}</p>
+              </div>
+            ) : fetchError ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-destructive/20 bg-destructive/5 p-8">
+                <p className="text-sm text-destructive font-medium">{fetchError}</p>
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => window.location.reload()}
+                >
+                  {t("Try Again")}
+                </Button>
               </div>
             ) : filteredProducts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">

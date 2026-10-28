@@ -1,6 +1,7 @@
 {
-  "name": "my-project",
+  "name": "directroots",
   "version": "0.1.0",
+  "description": "Hyperlocal farm and artisan direct marketplace with eco-friendly grouped delivery routing",
   "private": true,
   "scripts": {
     "dev": "next dev",

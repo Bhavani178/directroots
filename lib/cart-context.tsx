@@ -118,8 +118,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     try {
       const parsedId = parseInt(String(product.id))
       if (isNaN(parsedId)) {
-        alert(`Failed to add: Invalid product ID (${product.id})`)
-        throw new Error(`Invalid product ID: ${product.id}`)
+        toast.error(`Invalid product ID`)
+        await hydrateCart()
+        return
       }
       
       const res = await fetch("/api/cart", {
@@ -128,6 +129,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ productId: parsedId, quantity: 1 }),
       })
       if (!res.ok) {
+        if (res.status === 401) {
+          toast.error("Please sign in to add items to your cart", {
+            action: {
+              label: "Sign in",
+              onClick: () => { window.location.href = "/login" }
+            }
+          })
+          await hydrateCart()
+          return
+        }
         const errorData = await res.json().catch(() => ({}))
         throw new Error(errorData.error || "Failed to add item to cart")
       }
@@ -146,13 +157,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const removeFromCart = async (cartItemId: number) => {
     setItems((prev) => prev.filter((item) => item.cartItemId !== cartItemId))
     try {
-      await fetch("/api/cart", {
+      const res = await fetch("/api/cart", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: cartItemId }),
       })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        toast.error(errorData.error || "Failed to remove item from cart")
+        await hydrateCart()
+      } else {
+        toast.success("Item removed from cart")
+      }
     } catch (err) {
       console.error("[removeFromCart]", err)
+      toast.error("Failed to remove item from cart")
       await hydrateCart()
     }
   }

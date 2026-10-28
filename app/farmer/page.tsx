@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useLanguage } from "@/lib/LanguageContext"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { toast } from "sonner"
 
 const fetcher = (url: string) => fetch(url).then((res) => {
   if (!res.ok) throw new Error("Failed to fetch")
@@ -66,13 +67,29 @@ export default function FarmerDashboardPage() {
 
   const handleStatusUpdate = async (orderId: number, status: string) => {
     // Optimistic update
-    mutateOrders(orders.map((o: any) => o.id === orderId ? { ...o, status } : o), false)
-    await fetch("/api/farmer/orders", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ orderId, status }),
-    })
-    mutateOrders()
+    const previousOrders = ordersData
+    if (ordersData) {
+      mutateOrders(ordersData.map((o: any) => o.id === orderId ? { ...o, status } : o), false)
+    }
+    try {
+      const res = await fetch("/api/farmer/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, status }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || "Failed to update order status")
+        mutateOrders(previousOrders, false)
+      } else {
+        toast.success(`Order #${orderId} marked as ${status.replace(/_/g, " ")}`)
+      }
+    } catch (err) {
+      toast.error("Network error updating order status")
+      mutateOrders(previousOrders, false)
+    } finally {
+      mutateOrders()
+    }
   }
 
   const handleBecomeSeller = async (e: React.FormEvent) => {

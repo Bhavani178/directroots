@@ -41,7 +41,7 @@ export default function LoginPage() {
     router.refresh()
     if (session?.user?.role === "ADMIN") {
       router.push("/admin")
-    } else if (session?.user?.role === "FARMER") {
+    } else if (session?.user?.role === "FARMER" || session?.user?.role === "ARTISAN") {
       router.push("/farmer")
     } else {
       router.push("/marketplace")

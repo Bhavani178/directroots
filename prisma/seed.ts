@@ -12,10 +12,14 @@ const prisma = new PrismaClient()
 async function main() {
   console.log("🌱 Starting seed...")
 
-  // ─── Hash passwords ──────────────────────────────────────────────────────────
-  const adminHash    = await bcrypt.hash("Admin@123",    10)
-  const farmerHash   = await bcrypt.hash("Farmer@123",   10)
-  const customerHash = await bcrypt.hash("Customer@123", 10)
+  // ─── Hash passwords (supports environment variable overrides) ──────────────
+  const adminPassword    = process.env.SEED_ADMIN_PASSWORD || "Admin@123"
+  const farmerPassword   = process.env.SEED_FARMER_PASSWORD || "Farmer@123"
+  const customerPassword = process.env.SEED_CUSTOMER_PASSWORD || "Customer@123"
+
+  const adminHash    = await bcrypt.hash(adminPassword,    10)
+  const farmerHash   = await bcrypt.hash(farmerPassword,   10)
+  const customerHash = await bcrypt.hash(customerPassword, 10)
 
   // ─── 1. ADMIN ────────────────────────────────────────────────────────────────
   const admin = await prisma.user.upsert({

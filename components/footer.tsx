@@ -39,7 +39,7 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="#" className="hover:text-white transition-colors">
+                <Link href="/#about" className="hover:text-white transition-colors">
                   About Us
                 </Link>
               </li>
@@ -51,22 +51,22 @@ export function Footer() {
             <h3 className="mb-4 font-semibold text-[#E5D7C4]">Support</h3>
             <ul className="space-y-2 text-sm text-[#E5D7C4]/70">
               <li>
-                <Link href="#" className="hover:text-white transition-colors">
+                <Link href="/#about" className="hover:text-white transition-colors">
                   Help Center
                 </Link>
               </li>
               <li>
-                <Link href="#" className="hover:text-white transition-colors">
+                <Link href="/#features" className="hover:text-white transition-colors">
                   Delivery Info
                 </Link>
               </li>
               <li>
-                <Link href="#" className="hover:text-white transition-colors">
+                <Link href="/#features" className="hover:text-white transition-colors">
                   Return Policy
                 </Link>
               </li>
               <li>
-                <Link href="#" className="hover:text-white transition-colors">
+                <Link href="/#features" className="hover:text-white transition-colors">
                   FAQs
                 </Link>
               </li>

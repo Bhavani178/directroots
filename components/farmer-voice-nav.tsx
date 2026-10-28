@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Mic, Loader2, Volume2, VolumeX } from "lucide-react"
 import { Button } from "./ui/button"
+import { useLanguage } from "@/lib/LanguageContext"
 
 const INTENT_ROUTES: Record<string, string> = {
   home: "/",
@@ -19,6 +20,7 @@ const INTENT_ROUTES: Record<string, string> = {
 export function FarmerVoiceNav() {
   const { data: session } = useSession()
   const router = useRouter()
+  const { language, t } = useLanguage()
   
   const [isListening, setIsListening] = useState(false)
   const [transcript, setTranscript] = useState("")
@@ -47,6 +49,7 @@ export function FarmerVoiceNav() {
     if (!voiceOn || !window.speechSynthesis) return
     window.speechSynthesis.cancel() // stop current
     const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = language === 'kn' ? 'kn-IN' : 'en-IN'
     window.speechSynthesis.speak(utterance)
   }
 
@@ -66,7 +69,7 @@ export function FarmerVoiceNav() {
       recognitionRef.current = new SpeechRecognition()
       recognitionRef.current.continuous = false
       recognitionRef.current.interimResults = false
-      recognitionRef.current.lang = 'en-US'
+      recognitionRef.current.lang = language === 'kn' ? 'kn-IN' : 'en-IN'
 
       recognitionRef.current.onresult = async (event: any) => {
         const text = event.results[0][0].transcript
@@ -169,8 +172,8 @@ export function FarmerVoiceNav() {
     }
   }
 
-  // Only show for farmers
-  if (session?.user?.role !== "FARMER") {
+  // Only render for producers (FARMER / ARTISAN) and ADMIN
+  if (!session?.user || (session.user.role !== "FARMER" && session.user.role !== "ARTISAN" && session.user.role !== "ADMIN")) {
     return null
   }
 

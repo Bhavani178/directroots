@@ -35,8 +35,10 @@ export async function GET(req: Request) {
   const category  = searchParams.get("category")
   const search    = searchParams.get("search")
   const farmerIdQ = searchParams.get("farmerId")
-  let lat         = searchParams.get("lat")   ? parseFloat(searchParams.get("lat")!)   : null
-  let lng         = searchParams.get("lng")   ? parseFloat(searchParams.get("lng")!)   : null
+  const rawLat    = searchParams.get("lat") ? parseFloat(searchParams.get("lat")!) : null
+  const rawLng    = searchParams.get("lng") ? parseFloat(searchParams.get("lng")!) : null
+  let lat         = (rawLat !== null && !isNaN(rawLat) && rawLat >= -90 && rawLat <= 90) ? rawLat : null
+  let lng         = (rawLng !== null && !isNaN(rawLng) && rawLng >= -180 && rawLng <= 180) ? rawLng : null
   const organic   = searchParams.get("organic") === "true"
   const handmade  = searchParams.get("handmade") === "true"
   const sort      = searchParams.get("sort") ?? "nearest"
@@ -60,9 +62,11 @@ export async function GET(req: Request) {
     lng = 77.5199
   }
 
-  const page  = searchParams.get("page")  ? Math.max(1, parseInt(searchParams.get("page")!)) : 1
-  const limit = searchParams.get("limit") ? Math.min(500, Math.max(1, parseInt(searchParams.get("limit")!))) : 300
-  const skip  = (page - 1) * limit
+  const rawPage  = parseInt(searchParams.get("page") || "1")
+  const page     = (!isNaN(rawPage) && rawPage > 0) ? rawPage : 1
+  const rawLimit = parseInt(searchParams.get("limit") || "300")
+  const limit    = (!isNaN(rawLimit) && rawLimit > 0 && rawLimit <= 500) ? rawLimit : 300
+  const skip     = (page - 1) * limit
 
   const conditions: Prisma.Sql[] = [Prisma.sql`1=1`]
 
@@ -80,20 +84,28 @@ export async function GET(req: Request) {
     } else if (category === "Spices & Herbs") {
       conditions.push(Prisma.sql`p."category" IN ('Spices & Herbs', 'Spices')`)
     } else {
-      conditions.push(Prisma.sql`p."category" = ${category}`)
+      conditions.push(Prisma.sql`p."category" = ${category.slice(0, 50)}`)
     }
   }
-  if (farmerIdQ) conditions.push(Prisma.sql`p."farmerId" = ${parseInt(farmerIdQ)}`)
+  if (farmerIdQ) {
+    const fId = parseInt(farmerIdQ)
+    if (!isNaN(fId) && fId > 0) {
+      conditions.push(Prisma.sql`p."farmerId" = ${fId}`)
+    }
+  }
   if (organic) conditions.push(Prisma.sql`p."isOrganic" = true`)
   if (handmade) conditions.push(Prisma.sql`p."isHandmade" = true`)
   if (search) {
-    const searchPattern = `%${search}%`
-    conditions.push(Prisma.sql`(
-      p."name" ILIKE ${searchPattern} OR 
-      p."description" ILIKE ${searchPattern} OR 
-      u."farmName" ILIKE ${searchPattern} OR 
-      u."name" ILIKE ${searchPattern}
-    )`)
+    const cleanSearch = search.trim().slice(0, 100)
+    if (cleanSearch) {
+      const searchPattern = `%${cleanSearch}%`
+      conditions.push(Prisma.sql`(
+        p."name" ILIKE ${searchPattern} OR 
+        p."description" ILIKE ${searchPattern} OR 
+        u."farmName" ILIKE ${searchPattern} OR 
+        u."name" ILIKE ${searchPattern}
+      )`)
+    }
   }
 
   let distanceSelect = Prisma.empty
@@ -155,11 +167,8 @@ export async function GET(req: Request) {
     farmer: {
       id: row.f_id,
       name: row.f_name,
-      farmName: row.f_farmName,
+      farmName: row.f_farmName || row.f_name,
       profileImage: row.f_profileImage,
-      lat: row.f_lat,
-      lng: row.f_lng,
-      address: row.f_address
     }
   }))
 

@@ -1,20 +1,49 @@
 import { NextResponse } from "next/server"
 import { boundsAround } from "@/lib/config"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 export async function GET(req: Request) {
+  // Rate limit: max 25 geocode requests per minute per IP
+  const rateLimit = checkRateLimit(req, "geocode", 25, 60)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: `Too many location requests. Please wait ${rateLimit.retryAfter} seconds.` },
+      { status: 429 }
+    )
+  }
+
   const { searchParams } = new URL(req.url)
   const address = searchParams.get("address")
   const reverse = searchParams.get("reverse") === "true"
-  const centerLat = searchParams.get("centerLat") ?? searchParams.get("lat")
-  const centerLng = searchParams.get("centerLng") ?? searchParams.get("lng")
+  const rawCenterLat = searchParams.get("centerLat") ?? searchParams.get("lat")
+  const rawCenterLng = searchParams.get("centerLng") ?? searchParams.get("lng")
   const openCageKey = process.env.OPENCAGE_API_KEY || process.env.OPEN_CAGE_API_KEY
 
-  // Reverse Geocoding Mode (lat/lng -> suggested address text)
-  if (reverse && centerLat && centerLng) {
+  // Validate coordinates if provided
+  let centerLat: number | null = null
+  let centerLng: number | null = null
+  if (rawCenterLat && rawCenterLng) {
+    const parsedLat = parseFloat(rawCenterLat)
+    const parsedLng = parseFloat(rawCenterLng)
+    if (
+      !isNaN(parsedLat) &&
+      !isNaN(parsedLng) &&
+      parsedLat >= -90 &&
+      parsedLat <= 90 &&
+      parsedLng >= -180 &&
+      parsedLng <= 180
+    ) {
+      centerLat = parsedLat
+      centerLng = parsedLng
+    }
+  }
+
+  // Reverse Geocoding Mode (lat/lng -> address text)
+  if (reverse && centerLat !== null && centerLng !== null) {
     if (openCageKey && openCageKey !== "YOUR_OPENCAGE_API_KEY_HERE") {
       try {
         const revUrl = `https://api.opencagedata.com/geocode/v1/json?q=${centerLat}+${centerLng}&key=${openCageKey}&limit=1&countrycode=in`
-        const res = await fetch(revUrl)
+        const res = await fetch(revUrl, { signal: AbortSignal.timeout(4000) })
         if (res.ok) {
           const data = await res.json()
           if (data.results && data.results.length > 0) {
@@ -25,7 +54,7 @@ export async function GET(req: Request) {
           }
         }
       } catch (e) {
-        console.warn("[reverse geocode] OpenCage failed", e)
+        console.warn("[reverse geocode] OpenCage request failed, falling back")
       }
     }
 
@@ -33,7 +62,8 @@ export async function GET(req: Request) {
     try {
       const nomRevUrl = `https://nominatim.openstreetmap.org/reverse?lat=${centerLat}&lon=${centerLng}&format=json`
       const res = await fetch(nomRevUrl, {
-        headers: { "User-Agent": "DirectRoots/1.0 (directroots-fyp@example.com)" },
+        headers: { "User-Agent": "DirectRoots/1.0 (directroots-market@example.com)" },
+        signal: AbortSignal.timeout(4000),
       })
       if (res.ok) {
         const data = await res.json()
@@ -45,22 +75,22 @@ export async function GET(req: Request) {
         }
       }
     } catch (e) {
-      console.warn("[reverse geocode] Nominatim failed", e)
+      console.warn("[reverse geocode] Nominatim request failed")
     }
 
-    return NextResponse.json({ displayName: `${centerLat}, ${centerLng}` })
+    return NextResponse.json({ displayName: `${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}` })
   }
 
   // Forward Geocoding Mode (address -> coordinates)
-  if (!address?.trim()) {
-    return NextResponse.json({ error: "address query param is required" }, { status: 400 })
+  if (!address || typeof address !== "string" || !address.trim()) {
+    return NextResponse.json({ error: "A valid address parameter is required" }, { status: 400 })
   }
 
-  const cleanAddress = address.trim()
+  const cleanAddress = address.trim().slice(0, 200) // Cap query length
 
   let boundsParam = ""
-  if (centerLat && centerLng && !isNaN(parseFloat(centerLat)) && !isNaN(parseFloat(centerLng))) {
-    const boundsStr = boundsAround(parseFloat(centerLat), parseFloat(centerLng))
+  if (centerLat !== null && centerLng !== null) {
+    const boundsStr = boundsAround(centerLat, centerLng)
     boundsParam = `&bounds=${boundsStr}`
   }
 
@@ -69,7 +99,7 @@ export async function GET(req: Request) {
     try {
       const encoded = encodeURIComponent(cleanAddress)
       const openCageUrl = `https://api.opencagedata.com/geocode/v1/json?q=${encoded}&key=${openCageKey}&limit=1&countrycode=in${boundsParam}`
-      const res = await fetch(openCageUrl)
+      const res = await fetch(openCageUrl, { signal: AbortSignal.timeout(4000) })
 
       if (res.ok) {
         const data = await res.json()
@@ -96,7 +126,7 @@ export async function GET(req: Request) {
         }
       }
     } catch (err) {
-      console.warn("[GET /api/geocode] OpenCage failed, falling back to Nominatim", err)
+      console.warn("[GET /api/geocode] OpenCage failed, falling back")
     }
   }
 
@@ -107,13 +137,14 @@ export async function GET(req: Request) {
 
     const res = await fetch(nominatimUrl, {
       headers: {
-        "User-Agent": "DirectRoots/1.0 (directroots-fyp@example.com)",
+        "User-Agent": "DirectRoots/1.0 (directroots-market@example.com)",
         Accept: "application/json",
       },
+      signal: AbortSignal.timeout(4000),
     })
 
     if (!res.ok) {
-      throw new Error(`Nominatim returned ${res.status}`)
+      return NextResponse.json({ lat: null, lng: null, found: false })
     }
 
     const data = await res.json()
@@ -138,8 +169,7 @@ export async function GET(req: Request) {
       provider: "Nominatim",
     })
   } catch (error) {
-    console.error("[GET /api/geocode] Geocoding failed", error)
-    return NextResponse.json({ error: "Geocoding failed" }, { status: 500 })
+    console.error("[GET /api/geocode] Geocoding service error")
+    return NextResponse.json({ error: "Geocoding service unavailable" }, { status: 503 })
   }
 }
-

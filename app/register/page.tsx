@@ -56,7 +56,7 @@ export default function RegisterPage() {
     })
 
     if (result?.ok) {
-      router.push(role === "FARMER" ? "/farmer" : "/marketplace")
+      router.push((role === "FARMER" || role === "ARTISAN") ? "/farmer" : "/marketplace")
     } else {
       router.push("/login")
     }

@@ -15,7 +15,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json()
-    const { farmName, sellerType, bio, address } = body
+    const { farmName, sellerType, bio, address, lat, lng } = body
 
     const targetRole = sellerType === "ARTISAN" ? "ARTISAN" : "FARMER"
     const userId = parseInt(session.user.id)
@@ -30,6 +30,14 @@ export async function POST(req: Request) {
 
     const defaultFarmName = farmName?.trim() || `${user.name || "My"}'s ${targetRole === "ARTISAN" ? "Crafts Studio" : "Farm"}`
 
+    // Only assign coordinates if explicitly confirmed and valid
+    let confirmedLat: number | undefined
+    let confirmedLng: number | undefined
+    if (typeof lat === "number" && typeof lng === "number" && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      confirmedLat = lat
+      confirmedLng = lng
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -37,9 +45,8 @@ export async function POST(req: Request) {
         farmName: defaultFarmName,
         ...(bio && { bio: bio.trim() }),
         ...(address && { address: address.trim() }),
-        // If user doesn't have coordinates, provide default Bidar hub
-        ...(user.lat === null && { lat: 17.9104 }),
-        ...(user.lng === null && { lng: 77.5199 }),
+        ...(confirmedLat !== undefined && { lat: confirmedLat }),
+        ...(confirmedLng !== undefined && { lng: confirmedLng }),
       },
       select: {
         id: true,

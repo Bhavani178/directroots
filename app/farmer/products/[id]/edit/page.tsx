@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select"
 import { categories } from "@/lib/data"
 import { useLanguage } from "@/lib/LanguageContext"
+import { toast } from "sonner"
 
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { t } = useLanguage()
@@ -61,13 +62,14 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       if (res.ok) {
         const { url } = await res.json()
         setFormData((prev) => ({ ...prev, imageUrl: url }))
+        toast.success("Image uploaded successfully!")
       } else {
-        const data = await res.json()
-        window.alert(data.error || "Upload failed")
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || "Upload failed")
         console.error("Upload failed", data.error)
       }
     } catch (err: any) {
-      window.alert(err.message || "An unexpected error occurred during upload.")
+      toast.error(err.message || "An unexpected error occurred during upload.")
       console.error(err)
     } finally {
       setIsUploading(false)

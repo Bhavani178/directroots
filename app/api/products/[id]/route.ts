@@ -17,9 +17,8 @@ function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
 }
 
 // ─── GET /api/products/[id] ───────────────────────────────────────────────────
-// Public. Returns full product with farmer profile.
-// Enforces 50km seller service radius for customers if location is available.
-// Sellers can always view their own products regardless of distance.
+// Public. Returns full product with producer public info.
+// Privacy protection: Does not expose raw private addresses or centimeter coordinates.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function GET(
   req: Request,
@@ -27,7 +26,7 @@ export async function GET(
 ) {
   const { id: rawId } = await params
   const id = parseInt(rawId)
-  if (isNaN(id)) return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
+  if (isNaN(id) || id <= 0) return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
 
   const product = await prisma.product.findUnique({
     where: { id },
@@ -51,14 +50,16 @@ export async function GET(
 
   if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 })
 
-  // Check if requesting user is the seller/owner
   const session = await getServerSession(authOptions)
   const isOwner = session?.user?.id && parseInt(session.user.id) === product.farmerId
+  let distanceKm: number | null = null
 
   if (!isOwner) {
     const { searchParams } = new URL(req.url)
-    let customerLat = searchParams.get("lat") ? parseFloat(searchParams.get("lat")!) : null
-    let customerLng = searchParams.get("lng") ? parseFloat(searchParams.get("lng")!) : null
+    const rawLat = searchParams.get("lat") ? parseFloat(searchParams.get("lat")!) : null
+    const rawLng = searchParams.get("lng") ? parseFloat(searchParams.get("lng")!) : null
+    let customerLat = (rawLat !== null && !isNaN(rawLat)) ? rawLat : null
+    let customerLng = (rawLng !== null && !isNaN(rawLng)) ? rawLng : null
 
     if ((customerLat === null || customerLng === null) && session?.user?.id) {
       const user = await prisma.user.findUnique({
@@ -71,22 +72,44 @@ export async function GET(
       }
     }
 
-    if (customerLat !== null && customerLng !== null && product.farmer.lat && product.farmer.lng) {
+    if (
+      customerLat !== null &&
+      customerLng !== null &&
+      product.farmer.lat !== null &&
+      product.farmer.lng !== null
+    ) {
       const dist = haversine(customerLat, customerLng, product.farmer.lat, product.farmer.lng)
-      if (dist > MAX_FARM_DELIVERY_KM) {
-        return NextResponse.json(
-          { error: "Product is not available in your area (beyond 50 km local service radius)." },
-          { status: 404 }
-        )
-      }
+      distanceKm = parseFloat(dist.toFixed(2))
+      // Note: 50km service radius is enforced at order placement (checkout), not here.
+      // Blocking the detail page with a 404 causes confusing "Product not found" errors for
+      // customers who already have the item in cart. Distance is returned for UI display only.
     }
   }
 
-  return NextResponse.json(product)
+  // Sanitize farmer data before returning publicly
+  const generalLocation = product.farmer.address
+    ? product.farmer.address.split(",").slice(-2).join(",").trim()
+    : "Karnataka, India"
+
+  const sanitizedProduct = {
+    ...product,
+    distanceKm,
+    farmer: {
+      id: product.farmer.id,
+      name: product.farmer.name,
+      farmName: product.farmer.farmName || product.farmer.name,
+      bio: product.farmer.bio,
+      profileImage: product.farmer.profileImage,
+      role: product.farmer.role,
+      location: generalLocation,
+    },
+  }
+
+  return NextResponse.json(sanitizedProduct)
 }
 
 // ─── PUT /api/products/[id] ───────────────────────────────────────────────────
-// Protected: owner only (the farmer/artisan who created this product).
+// Protected: owner only (the farmer/artisan who created this product) or ADMIN.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function PUT(
   req: Request,
@@ -97,44 +120,54 @@ export async function PUT(
 
   const { id: rawId } = await params
   const id = parseInt(rawId)
-  if (isNaN(id)) return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
+  if (isNaN(id) || id <= 0) return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
 
-  // Ownership check
   const existing = await prisma.product.findUnique({ where: { id } })
   if (!existing) return NextResponse.json({ error: "Product not found" }, { status: 404 })
-  if (existing.farmerId !== parseInt(session.user.id)) {
-    return NextResponse.json({ error: "You do not own this product" }, { status: 403 })
+
+  const isOwner = existing.farmerId === parseInt(session.user.id)
+  const isAdmin = session.user.role === "ADMIN"
+
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ error: "You do not have permission to modify this product" }, { status: 403 })
   }
 
   try {
-    const body = await req.json()
+    const body = await req.json().catch(() => ({}))
     const {
       name, description, price, stock, imageUrl,
       category, unit, harvestDate, isOrganic,
       isHandmade, craftType,
     } = body
 
-    if (price !== undefined && (isNaN(parseFloat(price)) || parseFloat(price) < 0)) {
-      return NextResponse.json({ error: "Valid price is required" }, { status: 400 })
+    if (price !== undefined) {
+      const parsedPrice = parseFloat(price)
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        return NextResponse.json({ error: "Price must be a non-negative number" }, { status: 400 })
+      }
     }
-    if (stock !== undefined && (isNaN(parseInt(stock)) || parseInt(stock) < 0)) {
-      return NextResponse.json({ error: "Valid stock quantity is required" }, { status: 400 })
+
+    if (stock !== undefined) {
+      const parsedStock = parseInt(stock)
+      if (isNaN(parsedStock) || parsedStock < 0 || !Number.isInteger(parsedStock)) {
+        return NextResponse.json({ error: "Stock must be a non-negative integer" }, { status: 400 })
+      }
     }
 
     const updated = await prisma.product.update({
       where: { id },
       data: {
-        ...(name        !== undefined && { name: name.trim() }),
-        ...(description !== undefined && { description: description?.trim() || null }),
+        ...(name        !== undefined && { name: String(name).trim().slice(0, 150) }),
+        ...(description !== undefined && { description: description ? String(description).trim().slice(0, 2000) : null }),
         ...(price       !== undefined && { price: parseFloat(price) }),
         ...(stock       !== undefined && { stock: parseInt(stock) }),
-        ...(imageUrl    !== undefined && { imageUrl: imageUrl?.trim() || null }),
-        ...(category    !== undefined && { category: category.trim() }),
-        ...(unit        !== undefined && { unit: unit.trim() }),
+        ...(imageUrl    !== undefined && { imageUrl: imageUrl ? String(imageUrl).trim() : null }),
+        ...(category    !== undefined && { category: String(category).trim().slice(0, 50) }),
+        ...(unit        !== undefined && { unit: String(unit).trim().slice(0, 20) }),
         ...(harvestDate !== undefined && { harvestDate: harvestDate ? new Date(harvestDate) : null }),
         ...(isOrganic   !== undefined && { isOrganic: Boolean(isOrganic) }),
         ...(isHandmade  !== undefined && { isHandmade: Boolean(isHandmade) }),
-        ...(craftType   !== undefined && { craftType: craftType?.trim() || null }),
+        ...(craftType   !== undefined && { craftType: craftType ? String(craftType).trim().slice(0, 50) : null }),
       },
       include: {
         farmer: {
@@ -151,7 +184,7 @@ export async function PUT(
 }
 
 // ─── DELETE /api/products/[id] ────────────────────────────────────────────────
-// Protected: owner only. Was previously unguarded — critical security fix.
+// Protected: owner or ADMIN. Handles relational integrity safely.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function DELETE(
   _req: Request,
@@ -162,17 +195,37 @@ export async function DELETE(
 
   const { id: rawId } = await params
   const id = parseInt(rawId)
-  if (isNaN(id)) return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
+  if (isNaN(id) || id <= 0) return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
 
-  // Ownership check
   const existing = await prisma.product.findUnique({ where: { id } })
   if (!existing) return NextResponse.json({ error: "Product not found" }, { status: 404 })
-  if (existing.farmerId !== parseInt(session.user.id)) {
-    return NextResponse.json({ error: "You do not own this product" }, { status: 403 })
+
+  const isOwner = existing.farmerId === parseInt(session.user.id)
+  const isAdmin = session.user.role === "ADMIN"
+
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ error: "You do not have permission to delete this product" }, { status: 403 })
   }
 
   try {
-    // Remove from carts first (prevent FK violation)
+    // Check if this product has existing orders
+    const orderCount = await prisma.orderItem.count({ where: { productId: id } })
+
+    if (orderCount > 0) {
+      // Retain order history integrity: archive product by removing from carts & zeroing stock
+      await prisma.cartItem.deleteMany({ where: { productId: id } })
+      await prisma.product.update({
+        where: { id },
+        data: { stock: 0 },
+      })
+      return NextResponse.json({
+        success: true,
+        archived: true,
+        message: "Product has associated customer order history and has been archived from active listings.",
+      })
+    }
+
+    // No order history: safe to hard delete
     await prisma.cartItem.deleteMany({ where: { productId: id } })
     await prisma.product.delete({ where: { id } })
     return NextResponse.json({ success: true })

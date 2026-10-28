@@ -25,18 +25,21 @@ function getPermutations<T>(arr: T[]): T[][] {
 
 export async function GET() {
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "FARMER") {
+  if (!session || (session.user.role !== "FARMER" && session.user.role !== "ARTISAN" && session.user.role !== "ADMIN")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   const farmerId = parseInt(session.user.id)
+  if (isNaN(farmerId)) {
+    return NextResponse.json({ error: "Invalid user session" }, { status: 401 })
+  }
 
   const farmer = await prisma.user.findUnique({
     where: { id: farmerId },
   })
 
   if (!farmer?.lat || !farmer?.lng) {
-    return NextResponse.json({ error: "Farmer location not set" }, { status: 400 })
+    return NextResponse.json({ error: "Seller location not set" }, { status: 400 })
   }
 
   const farmerLoc = { lat: farmer.lat, lng: farmer.lng }
