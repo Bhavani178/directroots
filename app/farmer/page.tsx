@@ -58,11 +58,27 @@ export default function FarmerDashboardPage() {
   const products = Array.isArray(productsData) ? productsData : []
   const orders = Array.isArray(ordersData) ? ordersData : []
 
-  const handleDelete = async (id: number) => {
-    // Optimistic update
-    mutateProducts(products.filter((p: any) => p.id !== id), false)
-    await fetch(`/api/products/${id}`, { method: "DELETE" })
-    mutateProducts()
+  const handleDelete = async (id: number, name: string) => {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
+
+    // Optimistically remove from UI immediately
+    const updated = products.filter((p: any) => p.id !== id)
+    mutateProducts(updated, false)
+
+    try {
+      const res = await fetch(`/api/products/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || "Failed to delete product")
+        mutateProducts() // restore on failure
+        return
+      }
+      toast.success(`"${name}" deleted successfully`)
+      // Keep the optimistic removal — do NOT re-fetch (archived stock=0 products would reappear)
+    } catch {
+      toast.error("Network error. Could not delete product.")
+      mutateProducts() // restore on network failure
+    }
   }
 
   const handleStatusUpdate = async (orderId: number, status: string) => {
@@ -539,7 +555,7 @@ export default function FarmerDashboardPage() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-destructive hover:text-destructive"
-                                onClick={() => handleDelete(product.id)}
+                                onClick={() => handleDelete(product.id, product.name)}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>

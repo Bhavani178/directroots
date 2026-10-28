@@ -17,7 +17,10 @@ export async function GET() {
   }
 
   const products = await prisma.product.findMany({
-    where: { farmerId: parseInt(session.user.id) },
+    where: {
+      farmerId: parseInt(session.user.id),
+      stock: { gt: 0 },  // hide archived products (stock zeroed on deletion with order history)
+    },
     orderBy: { createdAt: "desc" },
   })
 
